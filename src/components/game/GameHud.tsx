@@ -1,4 +1,5 @@
 import type { GameSnapshot } from "@/game/state/gameTypes";
+import { getVehicleHealth } from "@/lib/vehicleHealth";
 
 interface GameHudProps {
   snapshot: GameSnapshot;
@@ -11,6 +12,10 @@ interface GameHudProps {
 export function GameHud({ snapshot, onPause, onResume, onToggleSound, onToggleMusic }: GameHudProps) {
   const paused = snapshot.status === "paused";
   const canTogglePause = snapshot.status === "playing" || paused;
+  const health = getVehicleHealth(snapshot.maxCollisions, snapshot.collisionsUsed);
+  const healthRadius = 24;
+  const healthCircumference = 2 * Math.PI * healthRadius;
+  const healthOffset = healthCircumference * (1 - health.ratio);
 
   return (
     <div className="pointer-events-auto absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-4 p-4 text-white sm:p-6" aria-label="Game information">
@@ -41,8 +46,27 @@ export function GameHud({ snapshot, onPause, onResume, onToggleSound, onToggleMu
         >
           {paused ? "Resume" : "Pause"}
         </button>
-        <div className="grid h-14 w-14 place-items-center rounded-full border-4 border-neon-green text-neon-green shadow-[0_0_18px_rgba(57,255,20,0.8)] sm:h-16 sm:w-16" aria-label="Vehicle preview">
-          <svg viewBox="0 0 32 32" className="h-8 w-8 fill-none stroke-current sm:h-9 sm:w-9" aria-hidden="true">
+        <div
+          className="relative grid h-14 w-14 shrink-0 place-items-center rounded-full sm:h-16 sm:w-16"
+          style={{ color: health.color, filter: `drop-shadow(0 0 8px ${health.color})` }}
+          aria-label={`Vehicle health: ${health.remaining} of ${snapshot.maxCollisions} collision allowance remaining`}
+          title={`Vehicle health: ${health.remaining}/${snapshot.maxCollisions}`}
+        >
+          <svg viewBox="0 0 64 64" className="h-full w-full -rotate-90 fill-none" aria-hidden="true">
+            <circle cx="32" cy="32" r={healthRadius} stroke="currentColor" strokeOpacity="0.18" strokeWidth="4" />
+            <circle
+              cx="32"
+              cy="32"
+              r={healthRadius}
+              stroke="currentColor"
+              strokeDasharray={healthCircumference}
+              strokeDashoffset={healthOffset}
+              strokeLinecap="round"
+              strokeWidth="4"
+              style={{ transition: "stroke-dashoffset 250ms ease, color 250ms ease" }}
+            />
+          </svg>
+          <svg viewBox="0 0 32 32" className="pointer-events-none absolute inset-0 m-auto h-8 w-8 fill-none stroke-current sm:h-9 sm:w-9" aria-hidden="true">
             <path d="M9 13.5 11.5 8h9L23 13.5M7 14h18v8H7zM10 22v2M22 22v2M10 17h.01M22 17h.01" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>

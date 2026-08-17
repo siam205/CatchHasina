@@ -1,19 +1,22 @@
+import { ACHIEVEMENT_DEFINITIONS, type AchievementRecords } from "@/game/achievements/achievementTypes";
 import type { LevelDefinition, LevelRecord } from "@/game/state/gameTypes";
 
 interface LevelSelectProps {
   levels: LevelDefinition[];
   unlockedLevel: number;
   records: Record<number, LevelRecord>;
+  achievements: AchievementRecords;
   onSelect: (level: LevelDefinition) => void;
+  onResetProgress: () => void;
 }
 
-export function LevelSelect({ levels, unlockedLevel, records, onSelect }: LevelSelectProps) {
+export function LevelSelect({ levels, unlockedLevel, records, achievements, onSelect, onResetProgress }: LevelSelectProps) {
   return (
     <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 shadow-[0_0_35px_rgba(255,0,60,0.1)] sm:p-8" aria-labelledby="level-select-title">
       <div className="max-w-xl">
         <p className="text-xs font-bold uppercase tracking-[0.28em] text-neon-green">Route select</p>
         <h2 id="level-select-title" className="mt-2 text-3xl font-black tracking-tight sm:text-5xl">Choose your maze.</h2>
-        <p className="mt-3 text-sm leading-6 text-white/55">Complete a route to unlock the next level. Results are kept for this session and will be persisted in a later phase.</p>
+        <p className="mt-3 text-sm leading-6 text-white/55">Complete a route to unlock the next level. Progress, best scores, and achievements are saved locally in this browser.</p>
       </div>
 
       <div className="mt-8 grid gap-4 md:grid-cols-3">
@@ -53,6 +56,29 @@ export function LevelSelect({ levels, unlockedLevel, records, onSelect }: LevelS
             </button>
           );
         })}
+      </div>
+
+      <div className="mt-8 border-t border-white/10 pt-6" aria-labelledby="achievement-title">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-neon-yellow">Achievements</p>
+            <h3 id="achievement-title" className="mt-1 text-xl font-black">{Object.keys(achievements).length} / {ACHIEVEMENT_DEFINITIONS.length} unlocked</h3>
+          </div>
+          <button type="button" onClick={onResetProgress} className="self-start rounded-lg border border-white/20 px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-white/60 transition hover:border-neon-red hover:text-white sm:self-auto">
+            Reset progress
+          </button>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {ACHIEVEMENT_DEFINITIONS.map((definition) => {
+            const unlocked = Boolean(achievements[definition.key]);
+            return (
+              <div key={definition.key} className={`rounded-xl border px-3 py-3 ${unlocked ? "border-neon-yellow/50 bg-neon-yellow/5" : "border-white/10 bg-white/[0.02] opacity-50"}`}>
+                <p className="text-xs font-black text-white">{definition.label}</p>
+                <p className="mt-1 text-[11px] leading-4 text-white/50">{definition.description}</p>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </section>
   );

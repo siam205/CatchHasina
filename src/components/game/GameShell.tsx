@@ -1,6 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { getNewAchievementKeys } from "@/game/achievements/AchievementSystem";
+import type { AchievementRecords } from "@/game/achievements/achievementTypes";
 import { GameCanvas } from "@/components/game/GameCanvas";
 import { GameHud } from "@/components/game/GameHud";
 import { GameOverlay } from "@/components/game/GameOverlay";
@@ -9,9 +11,17 @@ import { TouchControls } from "@/components/game/TouchControls";
 import { GameEngine } from "@/game/engine/GameEngine";
 import { LEVEL_CONFIGS, initialLevel } from "@/game/levels/levelConfig";
 import type { AudioSettings, GameSnapshot, LevelDefinition, LevelRecord, VehicleAction } from "@/game/state/gameTypes";
+import {
+  clearProgress,
+  createDefaultProgress,
+  DEFAULT_AUDIO_SETTINGS,
+  loadProgress,
+  saveProgress,
+} from "@/storage/localStorageAdapter";
+import { PROGRESS_STORAGE_VERSION } from "@/storage/storageTypes";
 
 type GameScreen = "select" | "playing";
-const defaultAudioSettings: AudioSettings = { soundEnabled: true, musicEnabled: true };
+const defaultAudioSettings: AudioSettings = { ...DEFAULT_AUDIO_SETTINGS };
 
 export function GameShell() {
   const [screen, setScreen] = useState<GameScreen>("select");
@@ -20,7 +30,31 @@ export function GameShell() {
   const [snapshot, setSnapshot] = useState(() => createInitialSnapshot(initialLevel, defaultAudioSettings));
   const [unlockedLevel, setUnlockedLevel] = useState(1);
   const [levelRecords, setLevelRecords] = useState<Record<number, LevelRecord>>({});
+  const [achievements, setAchievements] = useState<AchievementRecords>({});
+  const [progressLoaded, setProgressLoaded] = useState(false);
   const engineRef = useRef<GameEngine | null>(null);
+
+  useEffect(() => {
+    const progress = loadProgress();
+    setUnlockedLevel(Math.max(1, Math.min(progress.unlockedLevel, LEVEL_CONFIGS.length)));
+    setLevelRecords(progress.levelRecords);
+    setAchievements(progress.achievements);
+    setAudioSettings(progress.audioSettings);
+    setSnapshot(createInitialSnapshot(initialLevel, progress.audioSettings));
+    setProgressLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!progressLoaded) return;
+    const baseProgress = createDefaultProgress(audioSettings);
+    saveProgress({
+      ...baseProgress,
+      version: PROGRESS_STORAGE_VERSION,
+      unlockedLevel,
+      levelRecords,
+      achievements,
+    });
+  }, [achievements, audioSettings, levelRecords, progressLoaded, unlockedLevel]);
 
   const handleSelectLevel = (level: LevelDefinition) => {
     setActiveLevel(level);
@@ -54,6 +88,26 @@ export function GameShell() {
 
       return { ...current, [nextSnapshot.level]: nextRecord };
     });
+
+    const completedLevel = activeLevel ?? initialLevel;
+    const completedLevelCount = Object.keys(levelRecords).length + (levelRecords[nextSnapshot.level] ? 0 : 1);
+    const newAchievementKeys = getNewAchievementKeys({
+      snapshot: nextSnapshot,
+      level: completedLevel,
+      completedLevelCount,
+      totalLevelCount: LEVEL_CONFIGS.length,
+      existing: achievements,
+    });
+    if (newAchievementKeys.length > 0) {
+      setAchievements((current) => {
+        const next = { ...current };
+        const unlockedAt = new Date().toISOString();
+        for (const key of newAchievementKeys) {
+          if (!next[key]) next[key] = { unlockedAt };
+        }
+        return next;
+      });
+    }
   };
 
   const handleBackToLevels = () => {
@@ -76,6 +130,17 @@ export function GameShell() {
   const handleResume = () => engineRef.current?.resume();
   const handleToggleSound = () => engineRef.current?.toggleSound();
   const handleToggleMusic = () => engineRef.current?.toggleMusic();
+  const handleResetProgress = () => {
+    if (typeof window !== "undefined" && !window.confirm("Reset all local progress and achievements?")) return;
+    clearProgress();
+    const reset = createDefaultProgress(defaultAudioSettings);
+    setUnlockedLevel(reset.unlockedLevel);
+    setLevelRecords(reset.levelRecords);
+    setAchievements(reset.achievements);
+    setAudioSettings(reset.audioSettings);
+    setSnapshot(createInitialSnapshot(initialLevel, reset.audioSettings));
+    setProgressLoaded(true);
+  };
   const handleActionChange = (action: VehicleAction, pressed: boolean) => {
     engineRef.current?.setAction(action, pressed);
   };
@@ -96,7 +161,7 @@ export function GameShell() {
         </header>
 
         {screen === "select" && (
-          <LevelSelect levels={LEVEL_CONFIGS} unlockedLevel={unlockedLevel} records={levelRecords} onSelect={handleSelectLevel} />
+          <LevelSelect levels={LEVEL_CONFIGS} unlockedLevel={unlockedLevel} records={levelRecords} achievements={achievements} onSelect={handleSelectLevel} onResetProgress={handleResetProgress} />
         )}
 
         {screen === "playing" && activeLevel && (
