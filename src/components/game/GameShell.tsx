@@ -8,26 +8,29 @@ import { LevelSelect } from "@/components/game/LevelSelect";
 import { TouchControls } from "@/components/game/TouchControls";
 import { GameEngine } from "@/game/engine/GameEngine";
 import { LEVEL_CONFIGS, initialLevel } from "@/game/levels/levelConfig";
-import type { GameSnapshot, LevelDefinition, LevelRecord, VehicleAction } from "@/game/state/gameTypes";
+import type { AudioSettings, GameSnapshot, LevelDefinition, LevelRecord, VehicleAction } from "@/game/state/gameTypes";
 
 type GameScreen = "select" | "playing";
+const defaultAudioSettings: AudioSettings = { soundEnabled: true, musicEnabled: true };
 
 export function GameShell() {
   const [screen, setScreen] = useState<GameScreen>("select");
   const [activeLevel, setActiveLevel] = useState<LevelDefinition | null>(null);
-  const [snapshot, setSnapshot] = useState(() => createInitialSnapshot(initialLevel));
+  const [audioSettings, setAudioSettings] = useState<AudioSettings>(defaultAudioSettings);
+  const [snapshot, setSnapshot] = useState(() => createInitialSnapshot(initialLevel, defaultAudioSettings));
   const [unlockedLevel, setUnlockedLevel] = useState(1);
   const [levelRecords, setLevelRecords] = useState<Record<number, LevelRecord>>({});
   const engineRef = useRef<GameEngine | null>(null);
 
   const handleSelectLevel = (level: LevelDefinition) => {
     setActiveLevel(level);
-    setSnapshot(createInitialSnapshot(level));
+    setSnapshot(createInitialSnapshot(level, audioSettings));
     setScreen("playing");
   };
 
   const handleSnapshotChange = (nextSnapshot: GameSnapshot) => {
     setSnapshot(nextSnapshot);
+    setAudioSettings({ soundEnabled: nextSnapshot.soundEnabled, musicEnabled: nextSnapshot.musicEnabled });
     if (nextSnapshot.status !== "completed") return;
 
     setUnlockedLevel((current) => Math.max(current, Math.min(nextSnapshot.level + 1, LEVEL_CONFIGS.length)));
@@ -56,7 +59,7 @@ export function GameShell() {
   const handleBackToLevels = () => {
     engineRef.current?.stop();
     setActiveLevel(null);
-    setSnapshot(createInitialSnapshot(initialLevel));
+    setSnapshot(createInitialSnapshot(initialLevel, audioSettings));
     setScreen("select");
   };
 
@@ -71,6 +74,8 @@ export function GameShell() {
   const handleRetry = () => engineRef.current?.restart();
   const handlePause = () => engineRef.current?.pause();
   const handleResume = () => engineRef.current?.resume();
+  const handleToggleSound = () => engineRef.current?.toggleSound();
+  const handleToggleMusic = () => engineRef.current?.toggleMusic();
   const handleActionChange = (action: VehicleAction, pressed: boolean) => {
     engineRef.current?.setAction(action, pressed);
   };
@@ -96,8 +101,8 @@ export function GameShell() {
 
         {screen === "playing" && activeLevel && (
           <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-black shadow-[0_0_35px_rgba(255,0,60,0.12)] sm:rounded-3xl">
-            <GameCanvas key={activeLevel.level} engineRef={engineRef} level={activeLevel} onSnapshotChange={handleSnapshotChange} />
-            <GameHud snapshot={snapshot} onPause={handlePause} onResume={handleResume} />
+            <GameCanvas key={activeLevel.level} engineRef={engineRef} level={activeLevel} audioSettings={audioSettings} onSnapshotChange={handleSnapshotChange} />
+            <GameHud snapshot={snapshot} onPause={handlePause} onResume={handleResume} onToggleSound={handleToggleSound} onToggleMusic={handleToggleMusic} />
             <GameOverlay
               snapshot={snapshot}
               onResume={handleResume}
@@ -106,6 +111,10 @@ export function GameShell() {
               continueLabel={activeLevel.level === LEVEL_CONFIGS.length ? "Level select" : "Next level"}
             />
             <div className="border-t border-white/10 bg-black/80 p-4 md:hidden">
+              <div className="mb-3 flex justify-center gap-2">
+                <button type="button" onClick={handleToggleSound} className="rounded-lg border border-white/20 px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-white/75">{snapshot.soundEnabled ? "SFX on" : "SFX off"}</button>
+                <button type="button" onClick={handleToggleMusic} className="rounded-lg border border-white/20 px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-white/75">{snapshot.musicEnabled ? "Music on" : "Music off"}</button>
+              </div>
               <TouchControls onActionChange={handleActionChange} />
             </div>
           </section>
@@ -120,7 +129,7 @@ export function GameShell() {
   );
 }
 
-function createInitialSnapshot(level: LevelDefinition): GameSnapshot {
+function createInitialSnapshot(level: LevelDefinition, audioSettings: AudioSettings): GameSnapshot {
   return {
     status: "idle",
     level: level.level,
@@ -131,5 +140,7 @@ function createInitialSnapshot(level: LevelDefinition): GameSnapshot {
     totalCollectibles: level.collectibles.length,
     remainingTimeSeconds: level.timeLimitSeconds,
     countdownSeconds: 0,
+    soundEnabled: audioSettings.soundEnabled,
+    musicEnabled: audioSettings.musicEnabled,
   };
 }

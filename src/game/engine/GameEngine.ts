@@ -3,15 +3,18 @@ import {
   COLLISION_FLASH_SECONDS,
   COLLISION_SHAKE_SECONDS,
   COLLECTION_EFFECT_SECONDS,
+  COMPLETION_ANIMATION_SECONDS,
   LOGICAL_CANVAS_WIDTH,
   START_COUNTDOWN_SECONDS,
 } from "@/lib/constants";
-import type { GameSnapshot, LevelDefinition, Point, VehicleAction } from "@/game/state/gameTypes";
+import type { AudioSettings, GameSnapshot, LevelDefinition, Point, VehicleAction } from "@/game/state/gameTypes";
+import { AudioManager } from "./AudioManager";
 import { CollisionSystem } from "./CollisionSystem";
 import { CollectibleSystem } from "./CollectibleSystem";
 import { DestinationSystem } from "./DestinationSystem";
 import { GameLoop } from "./GameLoop";
 import { InputManager } from "./InputManager";
+import { ParticleSystem } from "./ParticleSystem";
 import { Renderer, type CollectionRenderEffect, type RenderEffects } from "./Renderer";
 import { ScoreSystem } from "./ScoreSystem";
 import { VehicleController } from "./VehicleController";
@@ -26,12 +29,14 @@ interface CollectionEffectState {
 export class GameEngine {
   private readonly loop: GameLoop;
   private readonly renderer: Renderer;
+  private readonly audioManager: AudioManager;
   private readonly inputManager: InputManager;
   private readonly vehicleController: VehicleController;
   private readonly collisionSystem: CollisionSystem;
   private readonly collectibleSystem: CollectibleSystem;
   private readonly destinationSystem: DestinationSystem;
   private readonly scoreSystem: ScoreSystem;
+  private readonly particleSystem: ParticleSystem;
   private readonly snapshotListeners = new Set<SnapshotListener>();
   private snapshot: GameSnapshot;
   private animationTime = 0;
@@ -41,19 +46,30 @@ export class GameEngine {
   private collectionEffects: CollectionEffectState[] = [];
   private remainingTimeSeconds: number;
   private countdownRemaining = 0;
+  private completionAnimationRemaining = 0;
+  private trailSpawnRemaining = 0;
+  private reducedMotion: boolean;
 
-  constructor(private readonly canvas: HTMLCanvasElement, private readonly level: LevelDefinition) {
+  constructor(
+    private readonly canvas: HTMLCanvasElement,
+    private readonly level: LevelDefinition,
+    audioSettings: AudioSettings,
+    reducedMotion = false,
+  ) {
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Canvas rendering is not available.");
 
     this.renderer = new Renderer(context);
+    this.audioManager = new AudioManager({ ...audioSettings });
     this.inputManager = new InputManager(() => this.togglePause());
     this.vehicleController = new VehicleController(level.vehicleStart);
     this.collisionSystem = new CollisionSystem();
     this.collectibleSystem = new CollectibleSystem();
     this.destinationSystem = new DestinationSystem();
     this.scoreSystem = new ScoreSystem();
+    this.particleSystem = new ParticleSystem();
     this.remainingTimeSeconds = level.timeLimitSeconds;
+    this.reducedMotion = reducedMotion;
     this.snapshot = this.createInitialSnapshot();
     this.resize(canvas.clientWidth || LOGICAL_CANVAS_WIDTH, 1);
     this.loop = new GameLoop((elapsedSeconds) => {
@@ -70,6 +86,13 @@ export class GameEngine {
   stop() {
     this.loop.stop();
     this.inputManager.detach();
+    this.audioManager.stopMusic();
+    this.audioManager.stopEngine();
+  }
+
+  destroy() {
+    this.stop();
+    this.audioManager.destroy();
   }
 
   pause() {
@@ -77,6 +100,8 @@ export class GameEngine {
 
     this.loop.stop();
     this.inputManager.detach();
+    this.audioManager.pauseMusic();
+    this.audioManager.pauseEngine();
     this.snapshot = { ...this.snapshot, status: "paused" };
     this.notifySnapshotListeners();
     this.render();
@@ -87,24 +112,24 @@ export class GameEngine {
 
     this.snapshot = { ...this.snapshot, status: "playing" };
     this.inputManager.attach();
+    this.audioManager.resumeMusic();
+    this.audioManager.resumeEngine();
     this.notifySnapshotListeners();
     this.loop.start();
-  }
-
-  private togglePause() {
-    if (this.snapshot.status === "playing") this.pause();
-    else if (this.snapshot.status === "paused") this.resume();
   }
 
   restart() {
     this.stop();
     this.vehicleController.reset();
     this.collectibleSystem.reset();
+    this.particleSystem.reset();
     this.animationTime = 0;
     this.collisionCooldownRemaining = 0;
     this.collisionFlashRemaining = 0;
     this.collisionShakeRemaining = 0;
     this.collectionEffects = [];
+    this.completionAnimationRemaining = 0;
+    this.trailSpawnRemaining = 0;
     this.remainingTimeSeconds = this.level.timeLimitSeconds;
     this.snapshot = this.createInitialSnapshot();
     this.beginCountdown();
@@ -117,6 +142,27 @@ export class GameEngine {
 
   setAction(action: VehicleAction, pressed: boolean) {
     this.inputManager.setAction(action, pressed);
+  }
+
+  toggleSound() {
+    const enabled = !this.snapshot.soundEnabled;
+    this.audioManager.setSoundEnabled(enabled);
+    if (enabled && this.snapshot.status === "playing") this.audioManager.startEngine();
+    this.snapshot = { ...this.snapshot, soundEnabled: enabled };
+    this.notifySnapshotListeners();
+  }
+
+  toggleMusic() {
+    const enabled = !this.snapshot.musicEnabled;
+    this.audioManager.setMusicEnabled(enabled);
+    if (enabled && this.snapshot.status === "playing") this.audioManager.startMusic();
+    this.snapshot = { ...this.snapshot, musicEnabled: enabled };
+    this.notifySnapshotListeners();
+  }
+
+  setReducedMotion(reducedMotion: boolean) {
+    this.reducedMotion = reducedMotion;
+    if (reducedMotion) this.particleSystem.reset();
   }
 
   getSnapshot() {
@@ -138,6 +184,13 @@ export class GameEngine {
       return;
     }
 
+    if (this.snapshot.status === "completed") {
+      this.completionAnimationRemaining = Math.max(0, this.completionAnimationRemaining - elapsedSeconds);
+      this.render();
+      if (this.completionAnimationRemaining === 0) this.stop();
+      return;
+    }
+
     if (this.snapshot.status !== "playing") {
       this.render();
       return;
@@ -145,14 +198,15 @@ export class GameEngine {
 
     if (this.updateTimer(elapsedSeconds)) {
       this.render();
-      this.loop.stop();
-      this.inputManager.detach();
+      this.stop();
       return;
     }
 
     this.collisionCooldownRemaining = Math.max(0, this.collisionCooldownRemaining - elapsedSeconds);
     const startPosition = this.vehicleController.getLastSafePosition();
     this.vehicleController.update(this.inputManager.getState(), elapsedSeconds, this.level);
+    this.audioManager.updateEngineSpeed(this.vehicleController.getVehicle().speed);
+    this.updateVehicleTrail();
 
     const collision = this.collisionSystem.detect(
       this.vehicleController.getVehicle(),
@@ -172,22 +226,22 @@ export class GameEngine {
 
     this.render();
 
-    if (failed || completed) {
-      this.loop.stop();
-      this.inputManager.detach();
-    }
+    if (failed) this.stop();
+    else if (completed) this.inputManager.detach();
   }
 
   private handleCollision() {
     this.vehicleController.restoreLastSafePosition();
     this.vehicleController.stop();
-
     this.collisionFlashRemaining = COLLISION_FLASH_SECONDS;
     this.collisionShakeRemaining = COLLISION_SHAKE_SECONDS;
 
     if (this.collisionCooldownRemaining > 0) return false;
 
     this.collisionCooldownRemaining = COLLISION_COOLDOWN_SECONDS;
+    this.audioManager.playCollision();
+    if (!this.reducedMotion) this.particleSystem.spawnCollision(this.vehicleController.getVehicle().position);
+
     const collisionsUsed = this.snapshot.collisionsUsed + 1;
     const failed = collisionsUsed >= this.snapshot.maxCollisions;
     this.snapshot = {
@@ -196,6 +250,7 @@ export class GameEngine {
       status: failed ? "failed" : "playing",
       failureReason: failed ? "collisionLimit" : undefined,
     };
+    if (failed) this.audioManager.playFailure();
     this.notifySnapshotListeners();
     return failed;
   }
@@ -207,6 +262,8 @@ export class GameEngine {
     if (countdownSeconds === 0) {
       this.snapshot = { ...this.snapshot, status: "playing", countdownSeconds: 0 };
       this.inputManager.attach();
+      this.audioManager.startMusic();
+      this.audioManager.startEngine();
       this.notifySnapshotListeners();
       return;
     }
@@ -221,6 +278,7 @@ export class GameEngine {
     this.remainingTimeSeconds = Math.max(0, this.remainingTimeSeconds - elapsedSeconds);
     if (this.remainingTimeSeconds === 0) {
       this.vehicleController.stop();
+      this.audioManager.playFailure();
       this.snapshot = {
         ...this.snapshot,
         status: "failed",
@@ -242,6 +300,8 @@ export class GameEngine {
   private updateEffects(elapsedSeconds: number) {
     this.collisionFlashRemaining = Math.max(0, this.collisionFlashRemaining - elapsedSeconds);
     this.collisionShakeRemaining = Math.max(0, this.collisionShakeRemaining - elapsedSeconds);
+    this.particleSystem.update(elapsedSeconds);
+    this.trailSpawnRemaining = Math.max(0, this.trailSpawnRemaining - elapsedSeconds);
     this.collectionEffects = this.collectionEffects
       .map((effect) => ({ ...effect, remainingSeconds: effect.remainingSeconds - elapsedSeconds }))
       .filter((effect) => effect.remainingSeconds > 0);
@@ -255,8 +315,13 @@ export class GameEngine {
 
     return {
       collisionFlashProgress: this.collisionFlashRemaining / COLLISION_FLASH_SECONDS,
-      collisionShakeProgress: this.collisionShakeRemaining / COLLISION_SHAKE_SECONDS,
-      collectionEffects,
+      collisionShakeProgress: this.reducedMotion ? 0 : this.collisionShakeRemaining / COLLISION_SHAKE_SECONDS,
+      collectionEffects: this.reducedMotion ? [] : collectionEffects,
+      completionProgress: this.reducedMotion || this.completionAnimationRemaining === 0
+        ? 0
+        : 1 - this.completionAnimationRemaining / COMPLETION_ANIMATION_SECONDS,
+      particles: this.reducedMotion ? [] : this.particleSystem.getParticles(),
+      reducedMotion: this.reducedMotion,
     };
   }
 
@@ -277,6 +342,10 @@ export class GameEngine {
     );
     if (collected.length === 0) return;
 
+    collected.forEach((collectible) => {
+      if (!this.reducedMotion) this.particleSystem.spawnCollectible(collectible.position);
+    });
+    this.audioManager.playCollectible();
     this.collectionEffects.push(...collected.map((collectible) => ({
       position: { ...collectible.position },
       remainingSeconds: COLLECTION_EFFECT_SECONDS,
@@ -305,6 +374,11 @@ export class GameEngine {
       score: this.snapshot.score + completionPoints,
       failureReason: undefined,
     };
+    this.completionAnimationRemaining = COMPLETION_ANIMATION_SECONDS;
+    this.audioManager.playComplete();
+    this.audioManager.pauseMusic();
+    this.audioManager.pauseEngine();
+    if (!this.reducedMotion) this.particleSystem.spawnCompletion(this.level.destination.position);
     this.notifySnapshotListeners();
     return true;
   }
@@ -324,6 +398,7 @@ export class GameEngine {
   }
 
   private createInitialSnapshot(): GameSnapshot {
+    const audioSettings = this.audioManager.getSettings();
     return {
       status: "idle",
       level: this.level.level,
@@ -334,7 +409,24 @@ export class GameEngine {
       totalCollectibles: this.level.collectibles.length,
       remainingTimeSeconds: this.level.timeLimitSeconds,
       countdownSeconds: 0,
+      soundEnabled: audioSettings.soundEnabled,
+      musicEnabled: audioSettings.musicEnabled,
     };
+  }
+
+  private updateVehicleTrail() {
+    if (this.reducedMotion || this.trailSpawnRemaining > 0) return;
+
+    const vehicle = this.vehicleController.getVehicle();
+    if (Math.abs(vehicle.speed) < 35) return;
+
+    this.particleSystem.spawnTrail(vehicle);
+    this.trailSpawnRemaining = 0.045;
+  }
+
+  private togglePause() {
+    if (this.snapshot.status === "playing") this.pause();
+    else if (this.snapshot.status === "paused") this.resume();
   }
 
   private notifySnapshotListeners() {

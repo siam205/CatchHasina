@@ -9,11 +9,15 @@ import {
   NEON_RED,
   NEON_YELLOW,
 } from "@/lib/constants";
+import type { Particle } from "./ParticleSystem";
 
 export interface RenderEffects {
   collisionFlashProgress: number;
   collisionShakeProgress: number;
   collectionEffects: CollectionRenderEffect[];
+  completionProgress: number;
+  particles: Particle[];
+  reducedMotion: boolean;
 }
 
 export interface CollectionRenderEffect {
@@ -53,8 +57,9 @@ export class Renderer {
     effects: RenderEffects,
   ) {
     const { width, height } = level;
+    const visualTime = effects.reducedMotion ? 0 : animationTime;
     this.context.save();
-    if (effects.collisionShakeProgress > 0) {
+    if (!effects.reducedMotion && effects.collisionShakeProgress > 0) {
       const shake = effects.collisionShakeProgress * 5;
       this.context.translate(
         Math.sin(animationTime * 70) * shake,
@@ -67,11 +72,15 @@ export class Renderer {
     this.drawVignette(width, height);
     this.drawBoundary(width, height);
     level.walls.forEach((segment) => this.drawWall(segment));
-    this.drawDestination(level.destination, animationTime);
+    this.drawDestination(level.destination, visualTime);
     level.collectibles.forEach((collectible, index) => {
-      if (!collectedIds.has(collectible.id)) this.drawCollectible(collectible, animationTime, index);
+      if (!collectedIds.has(collectible.id)) this.drawCollectible(collectible, visualTime, index);
     });
     effects.collectionEffects.forEach((effect) => this.drawCollectionEffect(effect));
+    if (!effects.reducedMotion) effects.particles.forEach((particle) => this.drawParticle(particle));
+    if (!effects.reducedMotion && effects.completionProgress > 0) {
+      this.drawCompletionEffect(level.destination, effects.completionProgress);
+    }
     this.drawVehicle(vehicle);
     this.context.restore();
 
@@ -212,6 +221,35 @@ export class Renderer {
       this.context.lineTo(Math.cos(angle) * endRadius, Math.sin(angle) * endRadius);
       this.context.stroke();
     }
+    this.context.restore();
+  }
+
+  private drawParticle(particle: Particle) {
+    const alpha = Math.max(0, Math.min(1, particle.life / particle.maxLife));
+    this.context.save();
+    this.context.globalAlpha = alpha;
+    this.context.fillStyle = particle.color;
+    this.context.shadowColor = particle.color;
+    this.context.shadowBlur = 10;
+    this.context.beginPath();
+    this.context.arc(particle.position.x, particle.position.y, particle.size, 0, Math.PI * 2);
+    this.context.fill();
+    this.context.restore();
+  }
+
+  private drawCompletionEffect(destination: Destination, progress: number) {
+    const radius = destination.radius + progress * 120;
+    const alpha = 1 - progress;
+
+    this.context.save();
+    this.context.strokeStyle = NEON_GREEN;
+    this.context.shadowColor = NEON_GREEN;
+    this.context.shadowBlur = 20;
+    this.context.globalAlpha = alpha;
+    this.context.lineWidth = 4;
+    this.context.beginPath();
+    this.context.arc(destination.position.x, destination.position.y, radius, 0, Math.PI * 2);
+    this.context.stroke();
     this.context.restore();
   }
 

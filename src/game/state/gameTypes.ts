@@ -23,6 +23,11 @@ export interface VehicleInput {
   turnRight: boolean;
 }
 
+export interface AudioSettings {
+  soundEnabled: boolean;
+  musicEnabled: boolean;
+}
+
 export interface WallSegment {
   start: Point;
   end: Point;
@@ -64,6 +69,8 @@ export interface GameSnapshot {
   totalCollectibles: number;
   remainingTimeSeconds: number;
   countdownSeconds: number;
+  soundEnabled: boolean;
+  musicEnabled: boolean;
   failureReason?: FailureReason;
 }
 

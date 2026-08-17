@@ -4,9 +4,11 @@ interface GameHudProps {
   snapshot: GameSnapshot;
   onPause: () => void;
   onResume: () => void;
+  onToggleSound: () => void;
+  onToggleMusic: () => void;
 }
 
-export function GameHud({ snapshot, onPause, onResume }: GameHudProps) {
+export function GameHud({ snapshot, onPause, onResume, onToggleSound, onToggleMusic }: GameHudProps) {
   const paused = snapshot.status === "paused";
   const canTogglePause = snapshot.status === "playing" || paused;
 
@@ -23,6 +25,14 @@ export function GameHud({ snapshot, onPause, onResume }: GameHudProps) {
         <Stat label="Time" value={formatTime(snapshot.remainingTimeSeconds)} />
       </div>
       <div className="flex shrink-0 items-center gap-3">
+        <div className="hidden gap-2 sm:flex">
+          <button type="button" onClick={onToggleSound} aria-pressed={snapshot.soundEnabled} className="rounded-lg border border-white/20 bg-black/60 px-2 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-white/75 transition hover:border-white">
+            {snapshot.soundEnabled ? "SFX" : "SFX off"}
+          </button>
+          <button type="button" onClick={onToggleMusic} aria-pressed={snapshot.musicEnabled} className="rounded-lg border border-white/20 bg-black/60 px-2 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-white/75 transition hover:border-white">
+            {snapshot.musicEnabled ? "Music" : "Music off"}
+          </button>
+        </div>
         <button
           type="button"
           onClick={paused ? onResume : onPause}
