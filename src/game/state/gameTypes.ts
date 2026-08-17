@@ -1,5 +1,5 @@
-export type GameStatus = "idle" | "starting" | "playing" | "paused" | "completed" | "failed";
-export type FailureReason = "collisionLimit" | "timeLimit";
+export type GameStatus = "idle" | "starting" | "playing" | "paused" | "exploding" | "completed" | "failed";
+export type FailureReason = "collisionLimit" | "timeLimit" | "hazard";
 
 export interface Point {
   x: number;
@@ -46,6 +46,12 @@ export interface Collectible {
   collected: boolean;
 }
 
+export interface Hazard {
+  id: string;
+  position: Point;
+  radius: number;
+}
+
 export interface LevelDefinition {
   level: number;
   width: number;
@@ -54,6 +60,7 @@ export interface LevelDefinition {
   vehicleStart: Vehicle;
   destination: Destination;
   collectibles: Collectible[];
+  hazards: Hazard[];
   maxCollisions: number;
   timeLimitSeconds: number;
   difficultyMultiplier: number;
@@ -72,6 +79,12 @@ export interface GameSnapshot {
   soundEnabled: boolean;
   musicEnabled: boolean;
   failureReason?: FailureReason;
+}
+
+export interface MiniMapState {
+  vehiclePosition: Point;
+  cameraPosition: Point;
+  collectedIds: ReadonlySet<string>;
 }
 
 export interface LevelRecord {

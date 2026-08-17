@@ -4,6 +4,7 @@ test("holding into a wall eventually ends the run", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => window.localStorage.clear());
   await page.reload();
+  await page.getByRole("button", { name: "Play as guest" }).click();
   await page.getByRole("button", { name: "Select level 1" }).click();
   await expect(page.getByText("Get ready")).toBeVisible();
 

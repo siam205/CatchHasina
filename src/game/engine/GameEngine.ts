@@ -4,16 +4,18 @@ import {
   COLLISION_SHAKE_SECONDS,
   COLLECTION_EFFECT_SECONDS,
   COMPLETION_ANIMATION_SECONDS,
+  EXPLOSION_ANIMATION_SECONDS,
   LOGICAL_CANVAS_WIDTH,
   START_COUNTDOWN_SECONDS,
 } from "@/lib/constants";
-import type { AudioSettings, GameSnapshot, LevelDefinition, Point, VehicleAction } from "@/game/state/gameTypes";
+import type { AudioSettings, GameSnapshot, LevelDefinition, MiniMapState, Point, VehicleAction } from "@/game/state/gameTypes";
 import { AudioManager } from "./AudioManager";
 import { Camera } from "./Camera";
 import { CollisionSystem } from "./CollisionSystem";
 import { CollectibleSystem } from "./CollectibleSystem";
 import { DestinationSystem } from "./DestinationSystem";
 import { GameLoop } from "./GameLoop";
+import { HazardSystem } from "./HazardSystem";
 import { InputManager } from "./InputManager";
 import { ParticleSystem } from "./ParticleSystem";
 import { Renderer, type CollectionRenderEffect, type RenderEffects } from "./Renderer";
@@ -35,6 +37,7 @@ export class GameEngine {
   private readonly inputManager: InputManager;
   private readonly vehicleController: VehicleController;
   private readonly collisionSystem: CollisionSystem;
+  private readonly hazardSystem: HazardSystem;
   private readonly collectibleSystem: CollectibleSystem;
   private readonly destinationSystem: DestinationSystem;
   private readonly scoreSystem: ScoreSystem;
@@ -49,6 +52,8 @@ export class GameEngine {
   private remainingTimeSeconds: number;
   private countdownRemaining = 0;
   private completionAnimationRemaining = 0;
+  private explosionAnimationRemaining = 0;
+  private explosionPosition: Point | null = null;
   private trailSpawnRemaining = 0;
   private reducedMotion: boolean;
 
@@ -67,6 +72,7 @@ export class GameEngine {
     this.inputManager = new InputManager(() => this.togglePause());
     this.vehicleController = new VehicleController(level.vehicleStart);
     this.collisionSystem = new CollisionSystem();
+    this.hazardSystem = new HazardSystem();
     this.collectibleSystem = new CollectibleSystem();
     this.destinationSystem = new DestinationSystem();
     this.scoreSystem = new ScoreSystem();
@@ -133,6 +139,8 @@ export class GameEngine {
     this.collisionShakeRemaining = 0;
     this.collectionEffects = [];
     this.completionAnimationRemaining = 0;
+    this.explosionAnimationRemaining = 0;
+    this.explosionPosition = null;
     this.trailSpawnRemaining = 0;
     this.remainingTimeSeconds = this.level.timeLimitSeconds;
     this.snapshot = this.createInitialSnapshot();
@@ -173,6 +181,14 @@ export class GameEngine {
     return this.snapshot;
   }
 
+  getMiniMapState(): MiniMapState {
+    return {
+      vehiclePosition: { ...this.vehicleController.getVehicle().position },
+      cameraPosition: { ...this.camera.getPosition() },
+      collectedIds: this.collectibleSystem.getCollectedIds(),
+    };
+  }
+
   subscribe(listener: SnapshotListener) {
     this.snapshotListeners.add(listener);
     listener(this.snapshot);
@@ -192,6 +208,17 @@ export class GameEngine {
       this.completionAnimationRemaining = Math.max(0, this.completionAnimationRemaining - elapsedSeconds);
       this.render();
       if (this.completionAnimationRemaining === 0) this.stop();
+      return;
+    }
+
+    if (this.snapshot.status === "exploding") {
+      this.explosionAnimationRemaining = Math.max(0, this.explosionAnimationRemaining - elapsedSeconds);
+      this.render();
+      if (this.explosionAnimationRemaining === 0) {
+        this.snapshot = { ...this.snapshot, status: "failed" };
+        this.notifySnapshotListeners();
+        this.stop();
+      }
       return;
     }
 
@@ -217,10 +244,13 @@ export class GameEngine {
       startPosition,
       this.level.walls,
     );
+    const hazard = collision
+      ? null
+      : this.hazardSystem.detect(this.vehicleController.getVehicle(), startPosition, this.level.hazards);
 
-    const failed = collision ? this.handleCollision() : false;
+    const failed = collision ? this.handleCollision() : hazard ? this.handleHazard() : false;
     let completed = false;
-    if (!collision) {
+    if (!collision && !hazard) {
       this.vehicleController.commitSafePosition();
       this.handleCollectibles();
       if (this.destinationSystem.detect(this.vehicleController.getVehicle(), this.level.destination)) {
@@ -230,7 +260,10 @@ export class GameEngine {
 
     this.render();
 
-    if (failed) this.stop();
+    if (failed) {
+      this.inputManager.detach();
+      if (this.explosionAnimationRemaining === 0) this.stop();
+    }
     else if (completed) this.inputManager.detach();
   }
 
@@ -257,6 +290,24 @@ export class GameEngine {
     if (failed) this.audioManager.playFailure();
     this.notifySnapshotListeners();
     return failed;
+  }
+
+  private handleHazard() {
+    const vehiclePosition = { ...this.vehicleController.getVehicle().position };
+    this.vehicleController.stop();
+    this.explosionPosition = vehiclePosition;
+    this.explosionAnimationRemaining = EXPLOSION_ANIMATION_SECONDS;
+    this.audioManager.playExplosion();
+    this.audioManager.pauseMusic();
+    this.audioManager.pauseEngine();
+    if (!this.reducedMotion) this.particleSystem.spawnExplosion(vehiclePosition);
+    this.snapshot = {
+      ...this.snapshot,
+      status: "exploding",
+      failureReason: "hazard",
+    };
+    this.notifySnapshotListeners();
+    return true;
   }
 
   private updateCountdown(elapsedSeconds: number) {
@@ -324,6 +375,10 @@ export class GameEngine {
       completionProgress: this.reducedMotion || this.completionAnimationRemaining === 0
         ? 0
         : 1 - this.completionAnimationRemaining / COMPLETION_ANIMATION_SECONDS,
+      explosionProgress: this.explosionAnimationRemaining === 0
+        ? 0
+        : 1 - this.explosionAnimationRemaining / EXPLOSION_ANIMATION_SECONDS,
+      explosionPosition: this.explosionPosition,
       particles: this.reducedMotion ? [] : this.particleSystem.getParticles(),
       reducedMotion: this.reducedMotion,
     };

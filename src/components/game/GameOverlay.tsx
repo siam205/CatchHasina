@@ -38,6 +38,7 @@ export function GameOverlay({ snapshot, onResume, onRetry, onContinue, continueL
 
   const completed = snapshot.status === "completed";
   const timedOut = snapshot.failureReason === "timeLimit";
+  const exploded = snapshot.failureReason === "hazard";
 
   return (
     <div className="absolute inset-0 z-20 grid place-items-center bg-black/70 p-6 text-center" role="alert" aria-live="assertive">
@@ -45,9 +46,9 @@ export function GameOverlay({ snapshot, onResume, onRetry, onContinue, continueL
         <p className={`text-xs font-bold uppercase tracking-[0.24em] ${completed ? "text-neon-green" : "text-neon-red"}`}>
           {completed ? "Destination reached" : "Run ended"}
         </p>
-        <h2 className="mt-2 text-3xl font-black text-white">{completed ? "Level complete" : timedOut ? "Time expired" : "Vehicle damaged"}</h2>
+        <h2 className="mt-2 text-3xl font-black text-white">{completed ? "Level complete" : exploded ? "Vehicle exploded" : timedOut ? "Time expired" : "Vehicle damaged"}</h2>
         <p className="mt-3 text-sm leading-6 text-white/65">
-          {completed ? "You reached the destination and secured the route." : timedOut ? "The time limit was reached." : "The collision limit was reached."}
+          {completed ? "You reached the destination and secured the route." : exploded ? "The vehicle touched a hazard and detonated." : timedOut ? "The time limit was reached." : "The collision limit was reached."}
         </p>
         <div className="mt-5 grid grid-cols-2 gap-3 text-left">
           <Result label="Score" value={snapshot.score.toString()} />

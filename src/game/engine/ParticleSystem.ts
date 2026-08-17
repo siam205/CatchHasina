@@ -45,6 +45,11 @@ export class ParticleSystem {
     this.spawnBurst(position, "#fff200", 18, 90, 3, 0.9);
   }
 
+  spawnExplosion(position: Point) {
+    this.spawnBurst(position, "#ff003c", 36, 180, 5, 0.9);
+    this.spawnBurst(position, "#ff9f0a", 24, 140, 4, 0.75);
+  }
+
   getParticles() {
     return this.particles;
   }

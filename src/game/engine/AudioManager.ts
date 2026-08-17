@@ -158,6 +158,11 @@ export class AudioManager {
     this.playTone(150, 0.25, "sawtooth", 0.08);
   }
 
+  playExplosion() {
+    this.playTone(70, 0.4, "sawtooth", 0.12);
+    this.playTone(220, 0.2, "square", 0.08, 0.08);
+  }
+
   destroy() {
     this.stopMusic();
     this.stopEngine();

@@ -1,4 +1,4 @@
-import type { Collectible, Destination, LevelDefinition, Point, Vehicle, WallSegment } from "@/game/state/gameTypes";
+import type { Collectible, Destination, Hazard, LevelDefinition, Point, Vehicle, WallSegment } from "@/game/state/gameTypes";
 import {
   CANVAS_BACKGROUND,
   CANVAS_BORDER,
@@ -16,6 +16,8 @@ export interface RenderEffects {
   collisionShakeProgress: number;
   collectionEffects: CollectionRenderEffect[];
   completionProgress: number;
+  explosionProgress: number;
+  explosionPosition: Point | null;
   particles: Particle[];
   reducedMotion: boolean;
 }
@@ -28,10 +30,14 @@ export interface CollectionRenderEffect {
 export class Renderer {
   private readonly destinationImage = new Image();
   private readonly collectibleImage = new Image();
+  private readonly hazardImage = new Image();
+  private readonly explosionImage = new Image();
 
   constructor(private readonly context: CanvasRenderingContext2D) {
     this.destinationImage.src = "/images/destination.webp";
     this.collectibleImage.src = "/images/bonus-point.webp";
+    this.hazardImage.src = "/images/hazard-modi.webp";
+    this.explosionImage.src = "/images/explosion.webp";
   }
 
   resize(canvas: HTMLCanvasElement, cssWidth: number, devicePixelRatio: number) {
@@ -81,6 +87,7 @@ export class Renderer {
     }
     this.context.translate(-camera.x, -camera.y);
     level.walls.forEach((segment) => this.drawWall(segment));
+    level.hazards.forEach((hazard) => this.drawHazard(hazard, visualTime));
     this.drawDestination(level.destination, visualTime);
     level.collectibles.forEach((collectible, index) => {
       if (!collectedIds.has(collectible.id)) this.drawCollectible(collectible, visualTime, index);
@@ -90,7 +97,8 @@ export class Renderer {
     if (!effects.reducedMotion && effects.completionProgress > 0) {
       this.drawCompletionEffect(level.destination, effects.completionProgress);
     }
-    this.drawVehicle(vehicle);
+    if (!effects.explosionPosition) this.drawVehicle(vehicle);
+    if (effects.explosionPosition) this.drawExplosionEffect(effects.explosionPosition, effects.explosionProgress);
     this.context.restore();
 
     this.drawBoundary(viewportWidth, viewportHeight);
@@ -122,6 +130,26 @@ export class Renderer {
 
   private drawWall(segment: WallSegment) {
     this.drawNeonLine(segment.start, segment.end, NEON_RED, segment.thickness);
+  }
+
+  private drawHazard(hazard: Hazard, animationTime: number) {
+    const pulse = 1 + Math.sin(animationTime * 2.6) * 0.06;
+    const radius = hazard.radius * pulse;
+
+    if (this.isImageReady(this.hazardImage)) {
+      this.drawImageMarker(this.hazardImage, hazard.position, radius, NEON_RED);
+      return;
+    }
+
+    this.context.save();
+    this.context.fillStyle = NEON_RED;
+    this.context.shadowColor = NEON_RED;
+    this.context.shadowBlur = 18;
+    this.context.globalAlpha = 0.75;
+    this.context.beginPath();
+    this.context.arc(hazard.position.x, hazard.position.y, radius, 0, Math.PI * 2);
+    this.context.fill();
+    this.context.restore();
   }
 
   private drawNeonLine(start: Point, end: Point, color: string, width: number) {
@@ -310,6 +338,52 @@ export class Renderer {
     this.context.beginPath();
     this.context.arc(destination.position.x, destination.position.y, radius, 0, Math.PI * 2);
     this.context.stroke();
+    this.context.restore();
+  }
+
+  private drawExplosionEffect(position: Point, progress: number) {
+    const radius = 12 + progress * 70;
+    const alpha = Math.max(0, 1 - progress);
+
+    if (this.isImageReady(this.explosionImage)) {
+      const imageSize = 110 + progress * 150;
+      this.context.save();
+      this.context.globalAlpha = alpha;
+      this.context.shadowColor = NEON_RED;
+      this.context.shadowBlur = 28;
+      this.context.drawImage(
+        this.explosionImage,
+        position.x - imageSize / 2,
+        position.y - imageSize / 2,
+        imageSize,
+        imageSize,
+      );
+      this.context.restore();
+    }
+
+    this.context.save();
+    this.context.translate(position.x, position.y);
+    this.context.strokeStyle = NEON_RED;
+    this.context.shadowColor = NEON_RED;
+    this.context.shadowBlur = 24;
+    this.context.globalAlpha = alpha;
+    this.context.lineWidth = 8;
+    this.context.beginPath();
+    this.context.arc(0, 0, radius, 0, Math.PI * 2);
+    this.context.stroke();
+
+    this.context.strokeStyle = "#ff9f0a";
+    this.context.shadowColor = "#ff9f0a";
+    this.context.lineWidth = 4;
+    for (let ray = 0; ray < 10; ray += 1) {
+      const angle = (ray * Math.PI * 2) / 10;
+      const innerRadius = radius * 0.7;
+      const outerRadius = radius + 18;
+      this.context.beginPath();
+      this.context.moveTo(Math.cos(angle) * innerRadius, Math.sin(angle) * innerRadius);
+      this.context.lineTo(Math.cos(angle) * outerRadius, Math.sin(angle) * outerRadius);
+      this.context.stroke();
+    }
     this.context.restore();
   }
 

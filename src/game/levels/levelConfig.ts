@@ -1,9 +1,15 @@
-import type { LevelDefinition, WallSegment } from "@/game/state/gameTypes";
+import type { Hazard, LevelDefinition, WallSegment } from "@/game/state/gameTypes";
 
 const wall = (x1: number, y1: number, x2: number, y2: number, thickness = 4): WallSegment => ({
   start: { x: x1, y: y1 },
   end: { x: x2, y: y2 },
   thickness,
+});
+
+const hazard = (id: string, x: number, y: number, radius = 34): Hazard => ({
+  id,
+  position: { x, y },
+  radius,
 });
 
 const createBoundaryWalls = (
@@ -25,6 +31,9 @@ const createBoundaryWalls = (
 const levelOneBoundary = createBoundaryWalls(960, 540, 44, 18, 250, 710);
 const levelTwoBoundary = createBoundaryWalls(1920, 1080, 72, 36, 820, 1100, 6);
 const levelThreeBoundary = createBoundaryWalls(2400, 1500, 90, 42, 1040, 1360, 6);
+const levelFourBoundary = createBoundaryWalls(2800, 1700, 100, 50, 1200, 1600, 6);
+const levelFiveBoundary = createBoundaryWalls(3200, 1900, 110, 50, 1440, 1760, 6);
+const levelSixBoundary = createBoundaryWalls(3600, 2200, 120, 55, 1640, 1960, 6);
 
 export const LEVEL_CONFIGS: LevelDefinition[] = [
   {
@@ -54,6 +63,7 @@ export const LEVEL_CONFIGS: LevelDefinition[] = [
       { id: "level-1-star-2", position: { x: 785, y: 275 }, value: 100, collected: false },
       { id: "level-1-star-3", position: { x: 155, y: 420 }, value: 100, collected: false },
     ],
+    hazards: [],
     maxCollisions: 8,
     timeLimitSeconds: 120,
     difficultyMultiplier: 1,
@@ -73,7 +83,6 @@ export const LEVEL_CONFIGS: LevelDefinition[] = [
       wall(420, 900, 900, 900, 6),
       wall(1100, 900, 1300, 900, 6),
       wall(72, 580, 260, 580, 6),
-      wall(1550, 580, 1848, 580, 6),
     ],
     vehicleStart: {
       position: { x: 960, y: 820 },
@@ -92,6 +101,7 @@ export const LEVEL_CONFIGS: LevelDefinition[] = [
       { id: "level-2-star-3", position: { x: 1400, y: 540 }, value: 125, collected: false },
       { id: "level-2-star-4", position: { x: 1680, y: 540 }, value: 125, collected: false },
     ],
+    hazards: [],
     maxCollisions: 7,
     timeLimitSeconds: 110,
     difficultyMultiplier: 1.1,
@@ -102,16 +112,14 @@ export const LEVEL_CONFIGS: LevelDefinition[] = [
     height: 1500,
     walls: [
       ...levelThreeBoundary,
-      wall(300, 400, 2050, 400, 6),
+      wall(300, 400, 1950, 400, 6),
       wall(300, 400, 300, 850, 6),
-      wall(2050, 400, 2050, 650, 6),
-      wall(500, 850, 1800, 850, 6),
+      wall(1950, 400, 1950, 650, 6),
+      wall(500, 850, 1700, 850, 6),
       wall(500, 850, 500, 1200, 6),
-      wall(1800, 850, 1800, 1050, 6),
-      wall(500, 1200, 1400, 1200, 6),
-      wall(1400, 1050, 1400, 1200, 6),
+      wall(1700, 850, 1700, 1050, 6),
+      wall(500, 1200, 1300, 1200, 6),
       wall(90, 670, 300, 670, 6),
-      wall(2050, 670, 2310, 670, 6),
       wall(900, 1050, 1200, 1050, 6),
     ],
     vehicleStart: {
@@ -126,15 +134,168 @@ export const LEVEL_CONFIGS: LevelDefinition[] = [
       radius: 30,
     },
     collectibles: [
-      { id: "level-3-star-1", position: { x: 720, y: 1120 }, value: 150, collected: false },
-      { id: "level-3-star-2", position: { x: 1600, y: 1120 }, value: 150, collected: false },
-      { id: "level-3-star-3", position: { x: 650, y: 650 }, value: 150, collected: false },
-      { id: "level-3-star-4", position: { x: 1750, y: 650 }, value: 150, collected: false },
-      { id: "level-3-star-5", position: { x: 1200, y: 600 }, value: 150, collected: false },
+      { id: "level-3-star-1", position: { x: 850, y: 1280 }, value: 150, collected: false },
+      { id: "level-3-star-2", position: { x: 1550, y: 1280 }, value: 150, collected: false },
+      { id: "level-3-star-3", position: { x: 1800, y: 650 }, value: 150, collected: false },
+      { id: "level-3-star-4", position: { x: 2100, y: 700 }, value: 150, collected: false },
+      { id: "level-3-star-5", position: { x: 1500, y: 600 }, value: 150, collected: false },
+    ],
+    hazards: [
+      hazard("level-3-hazard-1", 1050, 1120),
+      hazard("level-3-hazard-2", 1450, 650),
     ],
     maxCollisions: 6,
     timeLimitSeconds: 100,
     difficultyMultiplier: 1.25,
+  },
+  {
+    level: 4,
+    width: 2800,
+    height: 1700,
+    walls: [
+      ...levelFourBoundary,
+      wall(350, 450, 2300, 450, 6),
+      wall(350, 450, 350, 1000, 6),
+      wall(2300, 450, 2300, 700, 6),
+      wall(500, 1000, 2000, 1000, 6),
+      wall(500, 1000, 500, 1350, 6),
+      wall(2000, 1000, 2000, 1250, 6),
+      wall(500, 1350, 1300, 1350, 6),
+      wall(1500, 1350, 2000, 1350, 6),
+      wall(100, 780, 350, 780, 6),
+      wall(2300, 820, 2700, 820, 6),
+    ],
+    vehicleStart: {
+      position: { x: 1400, y: 1450 },
+      rotation: 0,
+      width: 34,
+      height: 66,
+      speed: 0,
+    },
+    destination: {
+      position: { x: 1400, y: 96 },
+      radius: 31,
+    },
+    collectibles: [
+      { id: "level-4-star-1", position: { x: 850, y: 1450 }, value: 175, collected: false },
+      { id: "level-4-star-2", position: { x: 1850, y: 1450 }, value: 175, collected: false },
+      { id: "level-4-star-3", position: { x: 1700, y: 1200 }, value: 175, collected: false },
+      { id: "level-4-star-4", position: { x: 900, y: 800 }, value: 175, collected: false },
+      { id: "level-4-star-5", position: { x: 2450, y: 800 }, value: 175, collected: false },
+      { id: "level-4-star-6", position: { x: 1800, y: 300 }, value: 175, collected: false },
+    ],
+    hazards: [
+      hazard("level-4-hazard-1", 900, 1450),
+      hazard("level-4-hazard-2", 1700, 1200),
+      hazard("level-4-hazard-3", 900, 800),
+    ],
+    maxCollisions: 5,
+    timeLimitSeconds: 90,
+    difficultyMultiplier: 1.45,
+  },
+  {
+    level: 5,
+    width: 3200,
+    height: 1900,
+    walls: [
+      ...levelFiveBoundary,
+      wall(600, 1500, 1450, 1500, 6),
+      wall(1750, 1500, 2500, 1500, 6),
+      wall(600, 1500, 600, 1700, 6),
+      wall(2500, 1500, 2500, 1700, 6),
+      wall(500, 1100, 2500, 1100, 6),
+      wall(500, 1100, 500, 1450, 6),
+      wall(2500, 1100, 2500, 1400, 6),
+      wall(300, 600, 2800, 600, 6),
+      wall(300, 600, 300, 900, 6),
+      wall(2800, 600, 2800, 800, 6),
+      wall(110, 850, 300, 850, 6),
+      wall(2800, 900, 3090, 900, 6),
+    ],
+    vehicleStart: {
+      position: { x: 1600, y: 1650 },
+      rotation: 0,
+      width: 34,
+      height: 66,
+      speed: 0,
+    },
+    destination: {
+      position: { x: 1600, y: 96 },
+      radius: 32,
+    },
+    collectibles: [
+      { id: "level-5-star-1", position: { x: 950, y: 1650 }, value: 200, collected: false },
+      { id: "level-5-star-2", position: { x: 2200, y: 1650 }, value: 200, collected: false },
+      { id: "level-5-star-3", position: { x: 1500, y: 1250 }, value: 200, collected: false },
+      { id: "level-5-star-4", position: { x: 800, y: 800 }, value: 200, collected: false },
+      { id: "level-5-star-5", position: { x: 2400, y: 800 }, value: 200, collected: false },
+      { id: "level-5-star-6", position: { x: 2000, y: 350 }, value: 200, collected: false },
+      { id: "level-5-star-7", position: { x: 1000, y: 350 }, value: 200, collected: false },
+    ],
+    hazards: [
+      hazard("level-5-hazard-1", 1000, 1650),
+      hazard("level-5-hazard-2", 2000, 1550),
+      hazard("level-5-hazard-3", 1600, 1250),
+      hazard("level-5-hazard-4", 1000, 800),
+    ],
+    maxCollisions: 5,
+    timeLimitSeconds: 82,
+    difficultyMultiplier: 1.65,
+  },
+  {
+    level: 6,
+    width: 3600,
+    height: 2200,
+    walls: [
+      ...levelSixBoundary,
+      wall(600, 1800, 1650, 1800, 6),
+      wall(1950, 1800, 3000, 1800, 6),
+      wall(600, 1800, 600, 2050, 6),
+      wall(3000, 1800, 3000, 2050, 6),
+      wall(500, 1350, 3000, 1350, 6),
+      wall(500, 1350, 500, 1700, 6),
+      wall(3000, 1350, 3000, 1650, 6),
+      wall(400, 850, 3300, 850, 6),
+      wall(400, 850, 400, 1100, 6),
+      wall(3300, 850, 3300, 1050, 6),
+      wall(300, 400, 3300, 400, 6),
+      wall(300, 400, 300, 650, 6),
+      wall(3300, 400, 3300, 650, 6),
+      wall(120, 1050, 400, 1050, 6),
+      wall(3300, 1150, 3480, 1150, 6),
+      wall(1450, 1550, 1800, 1550, 6),
+    ],
+    vehicleStart: {
+      position: { x: 1800, y: 1950 },
+      rotation: 0,
+      width: 34,
+      height: 66,
+      speed: 0,
+    },
+    destination: {
+      position: { x: 1800, y: 96 },
+      radius: 33,
+    },
+    collectibles: [
+      { id: "level-6-star-1", position: { x: 900, y: 1950 }, value: 225, collected: false },
+      { id: "level-6-star-2", position: { x: 2500, y: 1950 }, value: 225, collected: false },
+      { id: "level-6-star-3", position: { x: 1400, y: 1550 }, value: 225, collected: false },
+      { id: "level-6-star-4", position: { x: 2600, y: 1150 }, value: 225, collected: false },
+      { id: "level-6-star-5", position: { x: 900, y: 650 }, value: 225, collected: false },
+      { id: "level-6-star-6", position: { x: 2700, y: 650 }, value: 225, collected: false },
+      { id: "level-6-star-7", position: { x: 1800, y: 250 }, value: 225, collected: false },
+      { id: "level-6-star-8", position: { x: 3400, y: 1300 }, value: 225, collected: false },
+    ],
+    hazards: [
+      hazard("level-6-hazard-1", 1000, 1950),
+      hazard("level-6-hazard-2", 2200, 1700),
+      hazard("level-6-hazard-3", 1500, 1450),
+      hazard("level-6-hazard-4", 1200, 1000),
+      hazard("level-6-hazard-5", 2700, 700),
+    ],
+    maxCollisions: 4,
+    timeLimitSeconds: 75,
+    difficultyMultiplier: 1.9,
   },
 ];
 

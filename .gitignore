@@ -2,8 +2,10 @@ node_modules/
 .next/
 out/
 .env*
+.env
 *.tsbuildinfo
 npm-debug.log*
 test-results/
 playwright-report/
 blob-report/
+prisma/*.db

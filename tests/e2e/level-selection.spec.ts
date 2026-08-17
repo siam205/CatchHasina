@@ -1,10 +1,18 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("level selection", () => {
+  test("shows the Catch Hasina authentication copy", async ({ page }) => {
+    await page.goto("/");
+
+    await expect(page.getByRole("heading", { name: "Catch Hasina" })).toBeVisible();
+    await expect(page.getByText("Can You Catch Her?")).toBeVisible();
+  });
+
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await page.evaluate(() => window.localStorage.clear());
     await page.reload();
+    await page.getByRole("button", { name: "Play as guest" }).click();
   });
 
   test("shows the first level as available and later levels as locked", async ({ page }) => {
@@ -19,6 +27,7 @@ test.describe("level selection", () => {
 
     await expect(page.getByText("Get ready")).toBeVisible();
     await expect(page.getByLabel("Game information")).toBeVisible();
+    await expect(page.getByLabel("Zoomed-out maze mini map")).toBeVisible();
     await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
 
     await page.getByRole("button", { name: "Pause" }).click();
