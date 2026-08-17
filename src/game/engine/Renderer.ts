@@ -26,7 +26,13 @@ export interface CollectionRenderEffect {
 }
 
 export class Renderer {
-  constructor(private readonly context: CanvasRenderingContext2D) {}
+  private readonly destinationImage = new Image();
+  private readonly collectibleImage = new Image();
+
+  constructor(private readonly context: CanvasRenderingContext2D) {
+    this.destinationImage.src = "/images/destination.webp";
+    this.collectibleImage.src = "/images/bonus-point.webp";
+  }
 
   resize(canvas: HTMLCanvasElement, cssWidth: number, devicePixelRatio: number) {
     const safeWidth = Math.max(1, cssWidth);
@@ -54,10 +60,17 @@ export class Renderer {
     animationTime: number,
     vehicle: Vehicle,
     collectedIds: ReadonlySet<string>,
+    camera: Point,
     effects: RenderEffects,
   ) {
-    const { width, height } = level;
+    const viewportWidth = LOGICAL_CANVAS_WIDTH;
+    const viewportHeight = LOGICAL_CANVAS_HEIGHT;
     const visualTime = effects.reducedMotion ? 0 : animationTime;
+
+    this.context.fillStyle = CANVAS_BACKGROUND;
+    this.context.fillRect(0, 0, viewportWidth, viewportHeight);
+    this.drawVignette(viewportWidth, viewportHeight);
+
     this.context.save();
     if (!effects.reducedMotion && effects.collisionShakeProgress > 0) {
       const shake = effects.collisionShakeProgress * 5;
@@ -66,11 +79,7 @@ export class Renderer {
         Math.cos(animationTime * 64) * shake,
       );
     }
-
-    this.context.fillStyle = CANVAS_BACKGROUND;
-    this.context.fillRect(0, 0, width, height);
-    this.drawVignette(width, height);
-    this.drawBoundary(width, height);
+    this.context.translate(-camera.x, -camera.y);
     level.walls.forEach((segment) => this.drawWall(segment));
     this.drawDestination(level.destination, visualTime);
     level.collectibles.forEach((collectible, index) => {
@@ -84,11 +93,13 @@ export class Renderer {
     this.drawVehicle(vehicle);
     this.context.restore();
 
+    this.drawBoundary(viewportWidth, viewportHeight);
+
     if (effects.collisionFlashProgress > 0) {
       this.context.save();
       this.context.globalAlpha = effects.collisionFlashProgress * 0.22;
       this.context.fillStyle = NEON_RED;
-      this.context.fillRect(0, 0, width, height);
+      this.context.fillRect(0, 0, viewportWidth, viewportHeight);
       this.context.restore();
     }
   }
@@ -147,6 +158,11 @@ export class Renderer {
     const pulse = 1 + Math.sin(animationTime * 2.4) * 0.08;
     const radius = destination.radius * pulse;
 
+    if (this.isImageReady(this.destinationImage)) {
+      this.drawImageMarker(this.destinationImage, destination.position, radius, NEON_GREEN);
+      return;
+    }
+
     this.context.save();
     this.context.strokeStyle = NEON_GREEN;
     this.context.shadowColor = NEON_GREEN;
@@ -176,8 +192,13 @@ export class Renderer {
   private drawCollectible(collectible: Collectible, animationTime: number, index: number) {
     const rotation = animationTime * 0.35 + index * 0.6;
     const pulse = 1 + Math.sin(animationTime * 3 + index) * 0.08;
-    const outerRadius = 17 * pulse;
-    const innerRadius = 7 * pulse;
+    const outerRadius = 19 * pulse;
+    const innerRadius = 8 * pulse;
+
+    if (this.isImageReady(this.collectibleImage)) {
+      this.drawImageMarker(this.collectibleImage, collectible.position, outerRadius, NEON_YELLOW);
+      return;
+    }
 
     this.context.save();
     this.context.translate(collectible.position.x, collectible.position.y);
@@ -194,6 +215,45 @@ export class Renderer {
     this.context.lineWidth = 2;
     this.drawStar(outerRadius, innerRadius);
     this.context.restore();
+  }
+
+  private drawImageMarker(image: HTMLImageElement, position: Point, radius: number, color: string) {
+    const imageRadius = Math.max(1, radius - 4);
+
+    this.context.save();
+    this.context.fillStyle = "rgba(0, 0, 0, 0.72)";
+    this.context.beginPath();
+    this.context.arc(position.x, position.y, imageRadius, 0, Math.PI * 2);
+    this.context.fill();
+
+    this.context.beginPath();
+    this.context.arc(position.x, position.y, imageRadius, 0, Math.PI * 2);
+    this.context.clip();
+    this.context.globalAlpha = 0.96;
+    this.context.drawImage(image, position.x - imageRadius, position.y - imageRadius, imageRadius * 2, imageRadius * 2);
+    this.context.restore();
+
+    this.context.save();
+    this.context.strokeStyle = color;
+    this.context.shadowColor = color;
+    this.context.shadowBlur = 18;
+    this.context.globalAlpha = 0.55;
+    this.context.lineWidth = 7;
+    this.context.beginPath();
+    this.context.arc(position.x, position.y, radius, 0, Math.PI * 2);
+    this.context.stroke();
+
+    this.context.shadowBlur = 5;
+    this.context.globalAlpha = 1;
+    this.context.lineWidth = 2;
+    this.context.beginPath();
+    this.context.arc(position.x, position.y, radius, 0, Math.PI * 2);
+    this.context.stroke();
+    this.context.restore();
+  }
+
+  private isImageReady(image: HTMLImageElement) {
+    return image.complete && image.naturalWidth > 0;
   }
 
   private drawCollectionEffect(effect: CollectionRenderEffect) {

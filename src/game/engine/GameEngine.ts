@@ -9,6 +9,7 @@ import {
 } from "@/lib/constants";
 import type { AudioSettings, GameSnapshot, LevelDefinition, Point, VehicleAction } from "@/game/state/gameTypes";
 import { AudioManager } from "./AudioManager";
+import { Camera } from "./Camera";
 import { CollisionSystem } from "./CollisionSystem";
 import { CollectibleSystem } from "./CollectibleSystem";
 import { DestinationSystem } from "./DestinationSystem";
@@ -30,6 +31,7 @@ export class GameEngine {
   private readonly loop: GameLoop;
   private readonly renderer: Renderer;
   private readonly audioManager: AudioManager;
+  private readonly camera: Camera;
   private readonly inputManager: InputManager;
   private readonly vehicleController: VehicleController;
   private readonly collisionSystem: CollisionSystem;
@@ -61,6 +63,7 @@ export class GameEngine {
 
     this.renderer = new Renderer(context);
     this.audioManager = new AudioManager({ ...audioSettings });
+    this.camera = new Camera();
     this.inputManager = new InputManager(() => this.togglePause());
     this.vehicleController = new VehicleController(level.vehicleStart);
     this.collisionSystem = new CollisionSystem();
@@ -123,6 +126,7 @@ export class GameEngine {
     this.vehicleController.reset();
     this.collectibleSystem.reset();
     this.particleSystem.reset();
+    this.camera.reset();
     this.animationTime = 0;
     this.collisionCooldownRemaining = 0;
     this.collisionFlashRemaining = 0;
@@ -326,11 +330,14 @@ export class GameEngine {
   }
 
   private render() {
+    const vehicle = this.vehicleController.getVehicle();
+    this.camera.update(vehicle.position, this.level.width, this.level.height);
     this.renderer.render(
       this.level,
       this.animationTime,
-      this.vehicleController.getVehicle(),
+      vehicle,
       this.collectibleSystem.getCollectedIds(),
+      this.camera.getPosition(),
       this.getRenderEffects(),
     );
   }
