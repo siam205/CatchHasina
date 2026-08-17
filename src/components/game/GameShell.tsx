@@ -49,7 +49,7 @@ export function GameShell() {
 
         <footer className="flex flex-col gap-2 text-sm text-white/45 sm:flex-row sm:justify-between">
           <span>Level 1 vehicle preview</span>
-          <span>Wall collisions arrive in Phase 4</span>
+          <span>Timer and retry flow arrive in the next phase</span>
         </footer>
       </div>
     </main>

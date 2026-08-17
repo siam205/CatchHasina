@@ -13,6 +13,12 @@ import {
 export interface RenderEffects {
   collisionFlashProgress: number;
   collisionShakeProgress: number;
+  collectionEffects: CollectionRenderEffect[];
+}
+
+export interface CollectionRenderEffect {
+  position: Point;
+  progress: number;
 }
 
 export class Renderer {
@@ -39,7 +45,13 @@ export class Renderer {
     );
   }
 
-  render(level: LevelDefinition, animationTime: number, vehicle: Vehicle, effects: RenderEffects) {
+  render(
+    level: LevelDefinition,
+    animationTime: number,
+    vehicle: Vehicle,
+    collectedIds: ReadonlySet<string>,
+    effects: RenderEffects,
+  ) {
     const { width, height } = level;
     this.context.save();
     if (effects.collisionShakeProgress > 0) {
@@ -56,7 +68,10 @@ export class Renderer {
     this.drawBoundary(width, height);
     level.walls.forEach((segment) => this.drawWall(segment));
     this.drawDestination(level.destination, animationTime);
-    level.collectibles.forEach((collectible, index) => this.drawCollectible(collectible, animationTime, index));
+    level.collectibles.forEach((collectible, index) => {
+      if (!collectedIds.has(collectible.id)) this.drawCollectible(collectible, animationTime, index);
+    });
+    effects.collectionEffects.forEach((effect) => this.drawCollectionEffect(effect));
     this.drawVehicle(vehicle);
     this.context.restore();
 
@@ -150,8 +165,6 @@ export class Renderer {
   }
 
   private drawCollectible(collectible: Collectible, animationTime: number, index: number) {
-    if (collectible.collected) return;
-
     const rotation = animationTime * 0.35 + index * 0.6;
     const pulse = 1 + Math.sin(animationTime * 3 + index) * 0.08;
     const outerRadius = 17 * pulse;
@@ -171,6 +184,34 @@ export class Renderer {
     this.context.globalAlpha = 1;
     this.context.lineWidth = 2;
     this.drawStar(outerRadius, innerRadius);
+    this.context.restore();
+  }
+
+  private drawCollectionEffect(effect: CollectionRenderEffect) {
+    const radius = 10 + effect.progress * 34;
+    const alpha = 1 - effect.progress;
+
+    this.context.save();
+    this.context.translate(effect.position.x, effect.position.y);
+    this.context.strokeStyle = NEON_YELLOW;
+    this.context.shadowColor = NEON_YELLOW;
+    this.context.shadowBlur = 16;
+    this.context.globalAlpha = alpha;
+    this.context.lineWidth = 3;
+    this.context.beginPath();
+    this.context.arc(0, 0, radius, 0, Math.PI * 2);
+    this.context.stroke();
+
+    this.context.lineWidth = 2;
+    for (let ray = 0; ray < 8; ray += 1) {
+      const angle = (ray * Math.PI) / 4;
+      const startRadius = radius + 5;
+      const endRadius = radius + 13;
+      this.context.beginPath();
+      this.context.moveTo(Math.cos(angle) * startRadius, Math.sin(angle) * startRadius);
+      this.context.lineTo(Math.cos(angle) * endRadius, Math.sin(angle) * endRadius);
+      this.context.stroke();
+    }
     this.context.restore();
   }
 
