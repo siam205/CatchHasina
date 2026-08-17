@@ -1,4 +1,5 @@
 export type GameStatus = "idle" | "starting" | "playing" | "paused" | "completed" | "failed";
+export type FailureReason = "collisionLimit" | "timeLimit";
 
 export interface Point {
   x: number;
@@ -61,4 +62,15 @@ export interface GameSnapshot {
   maxCollisions: number;
   collectiblesCollected: number;
   totalCollectibles: number;
+  remainingTimeSeconds: number;
+  countdownSeconds: number;
+  failureReason?: FailureReason;
+}
+
+export interface LevelRecord {
+  completions: number;
+  bestScore: number;
+  bestCollisions: number;
+  bestCollectibles: number;
+  bestRemainingTimeSeconds: number;
 }

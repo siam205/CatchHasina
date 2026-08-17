@@ -2,26 +2,28 @@
 
 import { useEffect, useRef, type MutableRefObject } from "react";
 import { GameEngine } from "@/game/engine/GameEngine";
-import { initialLevel } from "@/game/levels/levelConfig";
-import type { GameSnapshot } from "@/game/state/gameTypes";
+import type { GameSnapshot, LevelDefinition } from "@/game/state/gameTypes";
 
 interface GameCanvasProps {
   engineRef: MutableRefObject<GameEngine | null>;
+  level: LevelDefinition;
   onSnapshotChange: (snapshot: GameSnapshot) => void;
 }
 
-export function GameCanvas({ engineRef, onSnapshotChange }: GameCanvasProps) {
+export function GameCanvas({ engineRef, level, onSnapshotChange }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const snapshotChangeRef = useRef(onSnapshotChange);
+  snapshotChangeRef.current = onSnapshotChange;
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const engine = new GameEngine(canvas, initialLevel);
+    const engine = new GameEngine(canvas, level);
     engineRef.current = engine;
-    const unsubscribe = engine.subscribe(onSnapshotChange);
+    const unsubscribe = engine.subscribe((snapshot) => snapshotChangeRef.current(snapshot));
     const resize = () => {
-      engine.resize(canvas.clientWidth || initialLevel.width, window.devicePixelRatio || 1);
+      engine.resize(canvas.clientWidth || level.width, window.devicePixelRatio || 1);
     };
 
     resize();
@@ -35,7 +37,7 @@ export function GameCanvas({ engineRef, onSnapshotChange }: GameCanvasProps) {
       engine.stop();
       if (engineRef.current === engine) engineRef.current = null;
     };
-  }, [engineRef, onSnapshotChange]);
+  }, [engineRef, level]);
 
   return (
     <canvas

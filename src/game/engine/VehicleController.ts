@@ -14,13 +14,19 @@ interface MovementBounds {
 }
 
 export class VehicleController {
+  private readonly startingVehicle: Vehicle;
   private readonly vehicle: Vehicle;
   private lastSafePosition: Vehicle["position"];
 
   constructor(start: Vehicle) {
-    this.vehicle = {
+    this.startingVehicle = {
       ...start,
       position: { ...start.position },
+      speed: 0,
+    };
+    this.vehicle = {
+      ...this.startingVehicle,
+      position: { ...this.startingVehicle.position },
       speed: 0,
     };
     this.lastSafePosition = { ...this.vehicle.position };
@@ -50,6 +56,13 @@ export class VehicleController {
 
   stop() {
     this.vehicle.speed = 0;
+  }
+
+  reset() {
+    this.vehicle.position = { ...this.startingVehicle.position };
+    this.vehicle.rotation = this.startingVehicle.rotation;
+    this.vehicle.speed = 0;
+    this.lastSafePosition = { ...this.vehicle.position };
   }
 
   private updateSpeed(input: VehicleInput, elapsedSeconds: number) {

@@ -4,6 +4,7 @@ import {
   COLLISION_SHAKE_SECONDS,
   COLLECTION_EFFECT_SECONDS,
   LOGICAL_CANVAS_WIDTH,
+  START_COUNTDOWN_SECONDS,
 } from "@/lib/constants";
 import type { GameSnapshot, LevelDefinition, Point, VehicleAction } from "@/game/state/gameTypes";
 import { CollisionSystem } from "./CollisionSystem";
@@ -38,28 +39,23 @@ export class GameEngine {
   private collisionFlashRemaining = 0;
   private collisionShakeRemaining = 0;
   private collectionEffects: CollectionEffectState[] = [];
+  private remainingTimeSeconds: number;
+  private countdownRemaining = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly level: LevelDefinition) {
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Canvas rendering is not available.");
 
     this.renderer = new Renderer(context);
-    this.inputManager = new InputManager();
+    this.inputManager = new InputManager(() => this.togglePause());
     this.vehicleController = new VehicleController(level.vehicleStart);
     this.collisionSystem = new CollisionSystem();
     this.collectibleSystem = new CollectibleSystem();
     this.destinationSystem = new DestinationSystem();
     this.scoreSystem = new ScoreSystem();
+    this.remainingTimeSeconds = level.timeLimitSeconds;
+    this.snapshot = this.createInitialSnapshot();
     this.resize(canvas.clientWidth || LOGICAL_CANVAS_WIDTH, 1);
-    this.snapshot = {
-      status: "idle",
-      level: level.level,
-      score: 0,
-      collisionsUsed: 0,
-      maxCollisions: level.maxCollisions,
-      collectiblesCollected: 0,
-      totalCollectibles: level.collectibles.length,
-    };
     this.loop = new GameLoop((elapsedSeconds) => {
       this.animationTime += elapsedSeconds;
       this.update(elapsedSeconds);
@@ -67,16 +63,51 @@ export class GameEngine {
   }
 
   start() {
-    this.snapshot = { ...this.snapshot, status: "playing" };
-    this.inputManager.attach();
-    this.notifySnapshotListeners();
-    this.render();
-    this.loop.start();
+    if (this.snapshot.status !== "idle") return;
+    this.beginCountdown();
   }
 
   stop() {
     this.loop.stop();
     this.inputManager.detach();
+  }
+
+  pause() {
+    if (this.snapshot.status !== "playing") return;
+
+    this.loop.stop();
+    this.inputManager.detach();
+    this.snapshot = { ...this.snapshot, status: "paused" };
+    this.notifySnapshotListeners();
+    this.render();
+  }
+
+  resume() {
+    if (this.snapshot.status !== "paused") return;
+
+    this.snapshot = { ...this.snapshot, status: "playing" };
+    this.inputManager.attach();
+    this.notifySnapshotListeners();
+    this.loop.start();
+  }
+
+  private togglePause() {
+    if (this.snapshot.status === "playing") this.pause();
+    else if (this.snapshot.status === "paused") this.resume();
+  }
+
+  restart() {
+    this.stop();
+    this.vehicleController.reset();
+    this.collectibleSystem.reset();
+    this.animationTime = 0;
+    this.collisionCooldownRemaining = 0;
+    this.collisionFlashRemaining = 0;
+    this.collisionShakeRemaining = 0;
+    this.collectionEffects = [];
+    this.remainingTimeSeconds = this.level.timeLimitSeconds;
+    this.snapshot = this.createInitialSnapshot();
+    this.beginCountdown();
   }
 
   resize(cssWidth: number, devicePixelRatio: number) {
@@ -101,8 +132,21 @@ export class GameEngine {
   private update(elapsedSeconds: number) {
     this.updateEffects(elapsedSeconds);
 
+    if (this.snapshot.status === "starting") {
+      this.updateCountdown(elapsedSeconds);
+      this.render();
+      return;
+    }
+
     if (this.snapshot.status !== "playing") {
       this.render();
+      return;
+    }
+
+    if (this.updateTimer(elapsedSeconds)) {
+      this.render();
+      this.loop.stop();
+      this.inputManager.detach();
       return;
     }
 
@@ -145,10 +189,54 @@ export class GameEngine {
 
     this.collisionCooldownRemaining = COLLISION_COOLDOWN_SECONDS;
     const collisionsUsed = this.snapshot.collisionsUsed + 1;
-    const status = collisionsUsed >= this.snapshot.maxCollisions ? "failed" : "playing";
-    this.snapshot = { ...this.snapshot, collisionsUsed, status };
+    const failed = collisionsUsed >= this.snapshot.maxCollisions;
+    this.snapshot = {
+      ...this.snapshot,
+      collisionsUsed,
+      status: failed ? "failed" : "playing",
+      failureReason: failed ? "collisionLimit" : undefined,
+    };
     this.notifySnapshotListeners();
-    return status === "failed";
+    return failed;
+  }
+
+  private updateCountdown(elapsedSeconds: number) {
+    this.countdownRemaining = Math.max(0, this.countdownRemaining - elapsedSeconds);
+    const countdownSeconds = Math.ceil(this.countdownRemaining);
+
+    if (countdownSeconds === 0) {
+      this.snapshot = { ...this.snapshot, status: "playing", countdownSeconds: 0 };
+      this.inputManager.attach();
+      this.notifySnapshotListeners();
+      return;
+    }
+
+    if (countdownSeconds !== this.snapshot.countdownSeconds) {
+      this.snapshot = { ...this.snapshot, countdownSeconds };
+      this.notifySnapshotListeners();
+    }
+  }
+
+  private updateTimer(elapsedSeconds: number) {
+    this.remainingTimeSeconds = Math.max(0, this.remainingTimeSeconds - elapsedSeconds);
+    if (this.remainingTimeSeconds === 0) {
+      this.vehicleController.stop();
+      this.snapshot = {
+        ...this.snapshot,
+        status: "failed",
+        remainingTimeSeconds: 0,
+        failureReason: "timeLimit",
+      };
+      this.notifySnapshotListeners();
+      return true;
+    }
+
+    const remainingTimeSeconds = Math.ceil(this.remainingTimeSeconds);
+    if (remainingTimeSeconds !== this.snapshot.remainingTimeSeconds) {
+      this.snapshot = { ...this.snapshot, remainingTimeSeconds };
+      this.notifySnapshotListeners();
+    }
+    return false;
   }
 
   private updateEffects(elapsedSeconds: number) {
@@ -215,9 +303,38 @@ export class GameEngine {
       ...this.snapshot,
       status: "completed",
       score: this.snapshot.score + completionPoints,
+      failureReason: undefined,
     };
     this.notifySnapshotListeners();
     return true;
+  }
+
+  private beginCountdown() {
+    this.countdownRemaining = START_COUNTDOWN_SECONDS;
+    this.snapshot = {
+      ...this.snapshot,
+      status: "starting",
+      countdownSeconds: START_COUNTDOWN_SECONDS,
+      remainingTimeSeconds: this.level.timeLimitSeconds,
+      failureReason: undefined,
+    };
+    this.notifySnapshotListeners();
+    this.render();
+    this.loop.start();
+  }
+
+  private createInitialSnapshot(): GameSnapshot {
+    return {
+      status: "idle",
+      level: this.level.level,
+      score: 0,
+      collisionsUsed: 0,
+      maxCollisions: this.level.maxCollisions,
+      collectiblesCollected: 0,
+      totalCollectibles: this.level.collectibles.length,
+      remainingTimeSeconds: this.level.timeLimitSeconds,
+      countdownSeconds: 0,
+    };
   }
 
   private notifySnapshotListeners() {

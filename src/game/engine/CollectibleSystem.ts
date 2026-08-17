@@ -31,4 +31,8 @@ export class CollectibleSystem {
   getCollectedCount() {
     return this.collectedIds.size;
   }
+
+  reset() {
+    this.collectedIds.clear();
+  }
 }

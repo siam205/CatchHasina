@@ -15,6 +15,8 @@ export class InputManager {
   private readonly pressedActions = new Set<VehicleAction>();
   private attached = false;
 
+  constructor(private readonly onPauseToggle: () => void) {}
+
   attach() {
     if (this.attached) return;
 
@@ -49,6 +51,12 @@ export class InputManager {
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent) => {
+    if (event.code === "KeyP" || event.code === "Escape") {
+      event.preventDefault();
+      this.onPauseToggle();
+      return;
+    }
+
     const action = actionByCode[event.code];
     if (!action) return;
 
