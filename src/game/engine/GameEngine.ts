@@ -5,7 +5,7 @@ import {
   COLLECTION_EFFECT_SECONDS,
   LOGICAL_CANVAS_WIDTH,
 } from "@/lib/constants";
-import type { Collectible, GameSnapshot, LevelDefinition, Point, VehicleAction } from "@/game/state/gameTypes";
+import type { GameSnapshot, LevelDefinition, Point, VehicleAction } from "@/game/state/gameTypes";
 import { CollisionSystem } from "./CollisionSystem";
 import { CollectibleSystem } from "./CollectibleSystem";
 import { DestinationSystem } from "./DestinationSystem";
