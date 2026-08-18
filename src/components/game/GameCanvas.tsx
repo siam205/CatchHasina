@@ -50,7 +50,7 @@ export function GameCanvas({ engineRef, level, audioSettings, onSnapshotChange }
     <canvas
       ref={canvasRef}
       aria-label="Maze game board"
-      className="block h-auto w-full rounded-[inherit]"
+      className="game-canvas block h-auto w-full rounded-[inherit]"
     />
   );
 }

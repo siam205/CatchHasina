@@ -41,6 +41,8 @@ export function GameShell() {
   const [progressLoaded, setProgressLoaded] = useState(false);
   const [scoreRefreshKey, setScoreRefreshKey] = useState(0);
   const engineRef = useRef<GameEngine | null>(null);
+  const gameFrameRef = useRef<HTMLElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const submittedScoreKeys = useRef(new Set<string>());
 
   useEffect(() => {
@@ -54,6 +56,12 @@ export function GameShell() {
       })
       .catch(() => undefined)
       .finally(() => setAuthLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => setIsFullscreen(document.fullscreenElement === gameFrameRef.current);
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
 
   useEffect(() => {
@@ -166,6 +174,16 @@ export function GameShell() {
   const handleResume = () => engineRef.current?.resume();
   const handleToggleSound = () => engineRef.current?.toggleSound();
   const handleToggleMusic = () => engineRef.current?.toggleMusic();
+  const handleToggleFullscreen = () => {
+    const frame = gameFrameRef.current;
+    if (!frame) return;
+
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else {
+      void frame.requestFullscreen().catch(() => undefined);
+    }
+  };
   const handleActionChange = (action: VehicleAction, pressed: boolean) => engineRef.current?.setAction(action, pressed);
   const handleResetProgress = () => {
     if (typeof window !== "undefined" && !window.confirm("Reset all local progress and achievements?")) return;
@@ -195,13 +213,13 @@ export function GameShell() {
           <LevelSelect levels={LEVEL_CONFIGS} unlockedLevel={unlockedLevel} records={levelRecords} achievements={achievements} onSelect={handleSelectLevel} onResetProgress={handleResetProgress} />
         </>}
 
-        {screen === "playing" && activeLevel && <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-black shadow-[0_0_35px_rgba(255,0,60,0.12)] sm:rounded-3xl">
+        {screen === "playing" && activeLevel && <section ref={gameFrameRef} className="game-frame relative overflow-hidden rounded-2xl border border-white/10 bg-black shadow-[0_0_35px_rgba(255,0,60,0.12)] sm:rounded-3xl">
           <GameCanvas key={activeLevel.level} engineRef={engineRef} level={activeLevel} audioSettings={audioSettings} onSnapshotChange={handleSnapshotChange} />
-          <GameHud snapshot={snapshot} onPause={handlePause} onResume={handleResume} onToggleSound={handleToggleSound} onToggleMusic={handleToggleMusic} />
+          <GameHud snapshot={snapshot} onPause={handlePause} onResume={handleResume} onToggleSound={handleToggleSound} onToggleMusic={handleToggleMusic} onToggleFullscreen={handleToggleFullscreen} isFullscreen={isFullscreen} />
           <MiniMap level={activeLevel} engineRef={engineRef} />
           <GameOverlay snapshot={snapshot} onResume={handleResume} onRetry={handleRetry} onContinue={handleContinue} continueLabel={activeLevel.level === LEVEL_CONFIGS.length ? "Level select" : "Next level"} />
-          <div className="border-t border-white/10 bg-black/80 p-4 md:hidden">
-            <div className="mb-3 flex justify-center gap-2"><button type="button" onClick={handleToggleSound} className="rounded-lg border border-white/20 px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-white/75">{snapshot.soundEnabled ? "SFX on" : "SFX off"}</button><button type="button" onClick={handleToggleMusic} className="rounded-lg border border-white/20 px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-white/75">{snapshot.musicEnabled ? "Music on" : "Music off"}</button></div>
+          <div className="pointer-events-auto absolute bottom-3 left-3 z-[15] rounded-2xl border border-white/20 bg-black/45 p-2 shadow-[0_0_18px_rgba(0,0,0,0.45)] backdrop-blur-md lg:hidden" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
+            <div className="mb-2 flex justify-center gap-2"><button type="button" onClick={handleToggleSound} className="rounded-lg border border-white/20 px-2 py-1 text-[9px] font-black uppercase tracking-[0.1em] text-white/75">{snapshot.soundEnabled ? "SFX" : "SFX off"}</button><button type="button" onClick={handleToggleMusic} className="rounded-lg border border-white/20 px-2 py-1 text-[9px] font-black uppercase tracking-[0.1em] text-white/75">{snapshot.musicEnabled ? "Music" : "Music off"}</button></div>
             <TouchControls onActionChange={handleActionChange} />
           </div>
         </section>}

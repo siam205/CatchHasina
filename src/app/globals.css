@@ -22,6 +22,21 @@ button {
   font: inherit;
 }
 
+.game-frame:fullscreen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  border: 0;
+  border-radius: 0;
+  background: #000;
+}
+
+.game-frame:fullscreen .game-canvas {
+  max-height: 100dvh;
+  object-fit: contain;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

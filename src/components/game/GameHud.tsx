@@ -7,9 +7,11 @@ interface GameHudProps {
   onResume: () => void;
   onToggleSound: () => void;
   onToggleMusic: () => void;
+  onToggleFullscreen: () => void;
+  isFullscreen: boolean;
 }
 
-export function GameHud({ snapshot, onPause, onResume, onToggleSound, onToggleMusic }: GameHudProps) {
+export function GameHud({ snapshot, onPause, onResume, onToggleSound, onToggleMusic, onToggleFullscreen, isFullscreen }: GameHudProps) {
   const paused = snapshot.status === "paused";
   const canTogglePause = snapshot.status === "playing" || paused;
   const health = getVehicleHealth(snapshot.maxCollisions, snapshot.collisionsUsed);
@@ -18,7 +20,7 @@ export function GameHud({ snapshot, onPause, onResume, onToggleSound, onToggleMu
   const healthOffset = healthCircumference * (1 - health.ratio);
 
   return (
-    <div className="pointer-events-auto absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-4 p-4 text-white sm:p-6" aria-label="Game information">
+    <div className="pointer-events-auto absolute inset-x-0 top-0 z-10 flex flex-col gap-2 p-3 text-white sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:p-6" aria-label="Game information">
       <div className="flex flex-wrap items-start gap-3 sm:gap-5">
         <div className="text-left leading-none">
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-white/65">Level</p>
@@ -29,7 +31,7 @@ export function GameHud({ snapshot, onPause, onResume, onToggleSound, onToggleMu
         <Stat label="Hits" value={`${snapshot.collisionsUsed}/${snapshot.maxCollisions}`} />
         <Stat label="Time" value={formatTime(snapshot.remainingTimeSeconds)} />
       </div>
-      <div className="flex shrink-0 items-center gap-3">
+      <div className="flex shrink-0 items-center gap-3 self-end sm:self-auto">
         <div className="hidden gap-2 sm:flex">
           <button type="button" onClick={onToggleSound} aria-pressed={snapshot.soundEnabled} className="rounded-lg border border-white/20 bg-black/60 px-2 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-white/75 transition hover:border-white">
             {snapshot.soundEnabled ? "SFX" : "SFX off"}
@@ -45,6 +47,9 @@ export function GameHud({ snapshot, onPause, onResume, onToggleSound, onToggleMu
           className="rounded-lg border border-white/30 bg-black/60 px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-white transition hover:border-white disabled:cursor-not-allowed disabled:opacity-40"
         >
           {paused ? "Resume" : "Pause"}
+        </button>
+        <button type="button" onClick={onToggleFullscreen} className="rounded-lg border border-white/30 bg-black/60 px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-white transition hover:border-white">
+          {isFullscreen ? "Exit full" : "Full screen"}
         </button>
         <div
           className="relative grid h-14 w-14 shrink-0 place-items-center rounded-full sm:h-16 sm:w-16"
