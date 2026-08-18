@@ -6,17 +6,22 @@ interface LevelSelectProps {
   unlockedLevel: number;
   records: Record<number, LevelRecord>;
   achievements: AchievementRecords;
+  signedIn: boolean;
   onSelect: (level: LevelDefinition) => void;
   onResetProgress: () => void;
 }
 
-export function LevelSelect({ levels, unlockedLevel, records, achievements, onSelect, onResetProgress }: LevelSelectProps) {
+export function LevelSelect({ levels, unlockedLevel, records, achievements, signedIn, onSelect, onResetProgress }: LevelSelectProps) {
   return (
     <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 shadow-[0_0_35px_rgba(255,0,60,0.1)] sm:p-8" aria-labelledby="level-select-title">
       <div className="max-w-xl">
         <p className="text-xs font-bold uppercase tracking-[0.28em] text-neon-green">Route select</p>
-        <h2 id="level-select-title" className="mt-2 text-3xl font-black tracking-tight sm:text-5xl">Choose your maze.</h2>
-        <p className="mt-3 text-sm leading-6 text-white/55">Complete a route to unlock the next level. Progress, best scores, and achievements are saved locally in this browser.</p>
+        <h2 id="level-select-title" className="mt-2 text-3xl font-black tracking-tight sm:text-5xl">Pick your route.</h2>
+        <p className="mt-3 text-sm leading-6 text-white/55">
+          Clear a route to open the next one. {signedIn
+            ? "Progress follows your account, so every device you sign in on stays in step."
+            : "Guest progress lives in this browser only — sign in to carry it across devices."}
+        </p>
       </div>
 
       <div className="mt-8 grid gap-4 md:grid-cols-3">
@@ -31,12 +36,12 @@ export function LevelSelect({ levels, unlockedLevel, records, achievements, onSe
               disabled={locked}
               onClick={() => onSelect(level)}
               className={`group rounded-2xl border p-5 text-left transition ${locked ? "cursor-not-allowed border-white/10 bg-white/[0.02] opacity-45" : "border-neon-red/40 bg-black hover:border-neon-red hover:shadow-[0_0_22px_rgba(255,0,60,0.24)]"}`}
-              aria-label={locked ? `Level ${level.level} locked` : `Select level ${level.level}`}
+              aria-label={locked ? `Level ${level.level}, ${level.name}, locked` : `Select level ${level.level}, ${level.name}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/50">Level</p>
-                  <p className="mt-1 text-4xl font-black text-white">{level.level}</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/50">Level {level.level}</p>
+                  <p className="mt-1 text-2xl font-black leading-tight text-white sm:text-3xl">{level.name}</p>
                 </div>
                 <span className={`rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${locked ? "border-white/20 text-white/45" : "border-neon-green/60 text-neon-green"}`}>
                   {locked ? "Locked" : record ? "Cleared" : "Open"}

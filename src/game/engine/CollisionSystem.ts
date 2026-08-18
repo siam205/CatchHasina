@@ -21,7 +21,7 @@ export class CollisionSystem {
   }
 }
 
-function distanceToSegment(point: Point, segment: WallSegment) {
+export function distanceToSegment(point: Point, segment: WallSegment) {
   const segmentX = segment.end.x - segment.start.x;
   const segmentY = segment.end.y - segment.start.y;
   const segmentLengthSquared = segmentX * segmentX + segmentY * segmentY;

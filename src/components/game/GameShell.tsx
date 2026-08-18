@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AccountDashboard } from "@/components/account/AccountDashboard";
 import { AuthGate } from "@/components/auth/AuthGate";
 import { GameCanvas } from "@/components/game/GameCanvas";
@@ -13,6 +13,12 @@ import { getNewAchievementKeys } from "@/game/achievements/AchievementSystem";
 import type { AchievementRecords } from "@/game/achievements/achievementTypes";
 import { GameEngine } from "@/game/engine/GameEngine";
 import { LEVEL_CONFIGS, initialLevel } from "@/game/levels/levelConfig";
+import {
+  findUnsyncedAchievementKeys,
+  mergeAchievements,
+  mergeLevelRecords,
+  mergeUnlockedLevel,
+} from "@/game/state/progressSync";
 import type { AudioSettings, GameSnapshot, LevelDefinition, LevelRecord, VehicleAction } from "@/game/state/gameTypes";
 import {
   clearProgress,
@@ -22,7 +28,7 @@ import {
   saveProgress,
 } from "@/storage/localStorageAdapter";
 import { PROGRESS_STORAGE_VERSION } from "@/storage/storageTypes";
-import type { AuthUser } from "@/types/auth";
+import type { AuthUser, ServerAchievement, ServerScore } from "@/types/auth";
 
 type GameScreen = "auth" | "select" | "playing";
 const defaultAudioSettings: AudioSettings = { ...DEFAULT_AUDIO_SETTINGS };
@@ -44,6 +50,29 @@ export function GameShell() {
   const gameFrameRef = useRef<HTMLElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const submittedScoreKeys = useRef(new Set<string>());
+
+  // Local storage only knows this browser. The account knows every device, so on sign-in the two
+  // are merged and progress only ever moves forward.
+  const syncAccountProgress = useCallback(async () => {
+    const [scoreResult, achievementResult] = await Promise.all([
+      fetch("/api/scores/me").then((response) => response.json()).catch(() => ({})),
+      fetch("/api/achievements").then((response) => response.json()).catch(() => ({})),
+    ]);
+    const scores: ServerScore[] = scoreResult?.scores ?? [];
+    const serverAchievements: ServerAchievement[] = achievementResult?.achievements ?? [];
+
+    setUnlockedLevel((current) => mergeUnlockedLevel(current, scores, LEVEL_CONFIGS.length));
+    setLevelRecords((current) => mergeLevelRecords(current, scores));
+    setAchievements((current) => mergeAchievements(current, serverAchievements));
+
+    const unsyncedKeys = findUnsyncedAchievementKeys(loadProgress().achievements, serverAchievements);
+    if (unsyncedKeys.length > 0) void pushAchievements(unsyncedKeys);
+  }, []);
+
+  useEffect(() => {
+    if (!progressLoaded || !currentUser) return;
+    void syncAccountProgress().catch(() => undefined);
+  }, [currentUser, progressLoaded, syncAccountProgress]);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -146,6 +175,7 @@ export function GameShell() {
     const completedLevelCount = Object.keys(levelRecords).length + (levelRecords[nextSnapshot.level] ? 0 : 1);
     const newAchievementKeys = getNewAchievementKeys({ snapshot: nextSnapshot, level: completedLevel, completedLevelCount, totalLevelCount: LEVEL_CONFIGS.length, existing: achievements });
     if (newAchievementKeys.length > 0) {
+      if (currentUser) void pushAchievements(newAchievementKeys);
       setAchievements((current) => {
         const next = { ...current };
         const unlockedAt = new Date().toISOString();
@@ -186,7 +216,10 @@ export function GameShell() {
   };
   const handleActionChange = (action: VehicleAction, pressed: boolean) => engineRef.current?.setAction(action, pressed);
   const handleResetProgress = () => {
-    if (typeof window !== "undefined" && !window.confirm("Reset all local progress and achievements?")) return;
+    const resetPrompt = currentUser
+      ? "Reset progress in this browser? Your account keeps its best scores, so cleared levels will unlock again next time you sign in."
+      : "Reset all local progress and achievements?";
+    if (typeof window !== "undefined" && !window.confirm(resetPrompt)) return;
     clearProgress();
     const reset = createDefaultProgress(defaultAudioSettings);
     setUnlockedLevel(reset.unlockedLevel);
@@ -204,13 +237,13 @@ export function GameShell() {
     <main className="min-h-screen bg-black px-4 py-8 text-white sm:px-8">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div><p className="text-sm font-bold uppercase tracking-[0.28em] text-neon-red">Neon Maze</p><h1 className="text-4xl font-black tracking-tight sm:text-6xl">Drive the route.</h1></div>
+          <div><p className="text-sm font-bold uppercase tracking-[0.28em] text-neon-red">Catch Hasina</p><h1 className="text-4xl font-black tracking-tight sm:text-6xl">She&apos;s got a head start.</h1></div>
           {screen === "playing" && <button type="button" onClick={handleBackToLevels} className="self-start rounded-lg border border-white/25 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-white transition hover:border-white sm:self-auto">Level select</button>}
         </header>
 
         {screen === "select" && <>
           <AccountDashboard user={currentUser} guestMode={guestMode} levels={LEVEL_CONFIGS} refreshKey={scoreRefreshKey} onLogout={handleLogout} />
-          <LevelSelect levels={LEVEL_CONFIGS} unlockedLevel={unlockedLevel} records={levelRecords} achievements={achievements} onSelect={handleSelectLevel} onResetProgress={handleResetProgress} />
+          <LevelSelect levels={LEVEL_CONFIGS} unlockedLevel={unlockedLevel} records={levelRecords} achievements={achievements} signedIn={Boolean(currentUser)} onSelect={handleSelectLevel} onResetProgress={handleResetProgress} />
         </>}
 
         {screen === "playing" && activeLevel && <section ref={gameFrameRef} className="game-frame relative overflow-hidden rounded-2xl border border-white/10 bg-black shadow-[0_0_35px_rgba(255,0,60,0.12)] sm:rounded-3xl">
@@ -224,10 +257,22 @@ export function GameShell() {
           </div>
         </section>}
 
-        <footer className="flex flex-col gap-2 text-sm text-white/45 sm:flex-row sm:justify-between"><span>{screen === "select" ? `${LEVEL_CONFIGS.length} authored routes` : `Level ${activeLevel?.level} active`}</span><span>Account scores and guest play active</span></footer>
+        <footer className="flex flex-col gap-2 text-sm text-white/45 sm:flex-row sm:justify-between"><span>{screen === "select" ? `${LEVEL_CONFIGS.length} routes authored` : `Level ${activeLevel?.level} — ${activeLevel?.name}`}</span><span>Account scores and guest play active</span></footer>
       </div>
     </main>
   );
+}
+
+async function pushAchievements(achievementKeys: string[]) {
+  try {
+    await fetch("/api/achievements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ achievementKeys }),
+    });
+  } catch {
+    // The achievement is already held locally; the next sign-in retries the sync.
+  }
 }
 
 async function submitScore(snapshot: GameSnapshot, level: number) {

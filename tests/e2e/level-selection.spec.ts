@@ -16,10 +16,21 @@ test.describe("level selection", () => {
   });
 
   test("shows the first level as available and later levels as locked", async ({ page }) => {
-    await expect(page.getByRole("heading", { name: "Choose your maze." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Pick your route." })).toBeVisible();
     await expect(page.getByRole("button", { name: "Select level 1" })).toBeEnabled();
-    await expect(page.getByRole("button", { name: "Level 2 locked" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Level 3 locked" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /Level 2, .+, locked/ })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /Level 3, .+, locked/ })).toBeDisabled();
+  });
+
+  test("names every authored route and offers all ten", async ({ page }) => {
+    await expect(page.getByRole("heading", { name: "Pick your route." })).toBeVisible();
+    await expect(page.getByText("Open Yard")).toBeVisible();
+    await expect(page.getByText("The Gauntlet")).toBeVisible();
+    await expect(page.getByRole("button", { name: /^(Select level|Level) \d+, / })).toHaveCount(10);
+  });
+
+  test("tells guests their progress is browser-only", async ({ page }) => {
+    await expect(page.getByText("Guest progress lives in this browser only")).toBeVisible();
   });
 
   test("starts a selected level and exposes pause controls", async ({ page }) => {

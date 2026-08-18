@@ -54,6 +54,7 @@ export interface Hazard {
 
 export interface LevelDefinition {
   level: number;
+  name: string;
   width: number;
   height: number;
   walls: WallSegment[];

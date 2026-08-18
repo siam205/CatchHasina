@@ -15,6 +15,11 @@ export interface ServerScore {
   remainingTimeSeconds: number;
 }
 
+export interface ServerAchievement {
+  achievementKey: string;
+  unlockedAt: string;
+}
+
 export interface LeaderboardEntry {
   rank: number;
   username: string;
